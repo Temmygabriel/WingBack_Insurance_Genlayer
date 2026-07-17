@@ -50,7 +50,7 @@ export function BuyForm({
           <input
             className="input mono"
             type="number"
-            step="0.1"
+            step="any"
             min="0.01"
             value={premium}
             onChange={(e) => onPremiumChange(e.target.value)}

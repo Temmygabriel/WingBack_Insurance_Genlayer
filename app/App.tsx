@@ -10,7 +10,7 @@ import type { Policy } from "../types";
 import { BuyForm } from "../components/BuyForm";
 import { PolicyCard } from "../components/PolicyCard";
 
-const POLL_INTERVAL = 5000;
+const POLL_INTERVAL = 8000;
 
 export default function App() {
   const accountRef = useRef<ReturnType<typeof makeAccount> | null>(null);
@@ -130,9 +130,6 @@ export default function App() {
         {address && (
           <p className="mono hint" style={{ marginTop: 14, wordBreak: "break-all" }}>{address}</p>
         )}
-        <p className="mono hint" style={{ marginTop: 6, color: "var(--red-2)" }}>
-          DEBUG — contract address seen by the app: {process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "MISSING / UNDEFINED"}
-        </p>
       </header>
 
       <BuyForm

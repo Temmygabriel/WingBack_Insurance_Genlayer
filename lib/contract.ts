@@ -120,15 +120,28 @@ export async function writeContractWithReturn(
 }
 
 export async function readContract(method: string, args: unknown[]): Promise<string> {
-  // Read calls don't need a persistent account
-  const account = createAccount();
-  const client = makeClient(account);
-  const result = await client.readContract({
-    address: CONTRACT_ADDRESS,
-    functionName: method,
-    args,
-  });
-  return result as string;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      // Read calls don't need a persistent account
+      const account = createAccount();
+      const client = makeClient(account);
+      const result = await client.readContract({
+        address: CONTRACT_ADDRESS,
+        functionName: method,
+        args,
+      });
+      return result as string;
+    } catch (err: any) {
+      if (attempt < MAX_ATTEMPTS) {
+        // Studionet's shared RPC returns "server busy, retry_after_seconds" under load.
+        // 2000ms base covers that hint; backs off further on later attempts.
+        await new Promise((r) => setTimeout(r, attempt * 2000));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("All read attempts failed");
 }
 
 // --- Wingback-specific wrappers ---------------------------------------------
