@@ -51,7 +51,7 @@ export async function writeContract(
         account,
         leaderOnly: false,
       };
-      if (value !== undefined) callParams.value = value;
+      if (value !== undefined) callParams.value = value.toString();
 
       const hash = await client.writeContract(callParams as any);
       await client.waitForTransactionReceipt({
@@ -86,7 +86,7 @@ export async function writeContractWithReturn(
         functionName: method,
         args,
       };
-      if (value !== undefined) simParams.value = value;
+      if (value !== undefined) simParams.value = value.toString();
 
       // simulateWriteContract gets the return value without waiting for consensus
       const returnValue = await client.simulateWriteContract(simParams as any);
@@ -98,7 +98,7 @@ export async function writeContractWithReturn(
         account,
         leaderOnly: false,
       };
-      if (value !== undefined) callParams.value = value;
+      if (value !== undefined) callParams.value = value.toString();
 
       const hash = await client.writeContract(callParams as any);
       await client.waitForTransactionReceipt({
