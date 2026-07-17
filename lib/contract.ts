@@ -88,6 +88,8 @@ export async function writeContractWithReturn(
       };
       if (value !== undefined) simParams.value = value.toString();
 
+      console.log("WINGBACK DEBUG — simParams about to be sent:", JSON.stringify(simParams, (_k, v) => typeof v === "bigint" ? v.toString() : v));
+
       // simulateWriteContract gets the return value without waiting for consensus
       const returnValue = await client.simulateWriteContract(simParams as any);
 
@@ -109,6 +111,11 @@ export async function writeContractWithReturn(
       });
       return returnValue as string;
     } catch (err: any) {
+      console.error("WINGBACK DEBUG — raw error caught:", err);
+      console.error("WINGBACK DEBUG — error.message:", err?.message);
+      console.error("WINGBACK DEBUG — error.cause:", err?.cause);
+      console.error("WINGBACK DEBUG — error.details:", err?.details);
+      console.error("WINGBACK DEBUG — full keys:", Object.getOwnPropertyNames(err || {}));
       if (attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, attempt * 3000));
         continue;
