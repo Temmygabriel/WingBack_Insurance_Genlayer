@@ -85,6 +85,7 @@ export async function writeContractWithReturn(
         address: CONTRACT_ADDRESS,
         functionName: method,
         args,
+        account,
       };
       if (value !== undefined) simParams.value = value;
 
