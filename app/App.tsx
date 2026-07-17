@@ -7,7 +7,6 @@ import {
   getPoliciesForHolder,
 } from "../lib/contract";
 import type { Policy } from "../types";
-import { SplitFlap } from "../components/SplitFlap";
 import { BuyForm } from "../components/BuyForm";
 import { PolicyCard } from "../components/PolicyCard";
 
@@ -108,7 +107,7 @@ export default function App() {
     try {
       await adjudicateFlight(accountRef.current, policyId);
       await refreshPolicies();
-    } catch (err: any) {
+    } catch {
       setError("Adjudication is taking longer than expected. It may still land on-chain — refresh in a minute.");
     } finally {
       adjudicatingRef.current.delete(policyId);
@@ -117,55 +116,61 @@ export default function App() {
   }
 
   return (
-    <div className="shell">
-      <header className="hero">
-        <div className="hero__wordmark">
-          <SplitFlap text="WINGBACK" size={22} />
+    <div className="container page-pad">
+      <header style={{ marginBottom: 36 }}>
+        <div className="badge" style={{ marginBottom: 16 }}>
+          <span className="badge-dot" />
+          GenLayer Studionet
         </div>
-        <p className="hero__tagline">
+        <h1 style={{ fontSize: 40, marginBottom: 14 }}>Wingback</h1>
+        <p style={{ color: "var(--ink-2)", maxWidth: "52ch", lineHeight: 1.6, fontSize: 15 }}>
           Register a flight. When it lands, GenLayer's validators independently check real flight data
           and reach consensus on a verdict — delayed or not — with the reasoning kept on-chain.
         </p>
-        {address && <div className="hero__address mono">{address}</div>}
+        {address && (
+          <p className="mono hint" style={{ marginTop: 14, wordBreak: "break-all" }}>{address}</p>
+        )}
       </header>
 
-      <section>
-        <p className="section-label">Register a flight</p>
-        <BuyForm
-          flightNumber={flightNumber}
-          departureDate={departureDate}
-          premium={premium}
-          buying={buying}
-          onFlightNumberChange={setFlightNumber}
-          onDepartureDateChange={setDepartureDate}
-          onPremiumChange={setPremium}
-          onSubmit={handleBuyPolicy}
-        />
-        {error && <div className="error-banner">{error}</div>}
-      </section>
+      <BuyForm
+        flightNumber={flightNumber}
+        departureDate={departureDate}
+        premium={premium}
+        buying={buying}
+        onFlightNumberChange={setFlightNumber}
+        onDepartureDateChange={setDepartureDate}
+        onPremiumChange={setPremium}
+        onSubmit={handleBuyPolicy}
+      />
 
-      <section style={{ marginTop: 40 }}>
-        <p className="section-label">Your flights</p>
+      {error && <div className="banner banner-error" style={{ marginTop: 16 }}>{error}</div>}
 
-        {loadingPolicies && <p className="mono" style={{ color: "var(--text-muted)" }}>Loading…</p>}
+      <div style={{ marginTop: 36 }}>
+        <p className="card-label" style={{ marginBottom: 12 }}>Your flights</p>
+
+        {loadingPolicies && <p className="hint">Loading…</p>}
 
         {!loadingPolicies && policies.length === 0 && (
-          <div className="empty-state">
-            No flights registered yet. Register one above — you'll be able to request a verdict once it's landed.
+          <div className="card">
+            <div className="empty-state">
+              No flights registered yet. Register one above — you'll be able to request a verdict once it's landed.
+            </div>
           </div>
         )}
 
-        <div className="board">
-          {policies.map((p) => (
-            <PolicyCard
-              key={p.policy_id}
-              policy={p}
-              onCheck={handleAdjudicate}
-              checking={adjudicatingIds.has(p.policy_id)}
-            />
-          ))}
-        </div>
-      </section>
+        {policies.length > 0 && (
+          <div className="card">
+            {policies.map((p) => (
+              <PolicyCard
+                key={p.policy_id}
+                policy={p}
+                onCheck={handleAdjudicate}
+                checking={adjudicatingIds.has(p.policy_id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

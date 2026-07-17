@@ -1,340 +1,241 @@
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@400;500;600;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap");
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0b1220;
-  --bg-raised: #121b2e;
-  --text: #e8ecf1;
-  --text-muted: #8a93a6;
-  --amber: #f2a33c;
-  --teal: #4ecdc4;
-  --red: #ef5f5f;
-  --border: #1f2b45;
+  /* Palette */
+  --sky:        #E8F3FF;
+  --sky-md:     #C5DCF7;
+  --sky-dk:     #3B82F6;
+  --teal:       #0D9488;
+  --teal-lt:    #CCFBF1;
+  --teal-md:    #99F6E4;
+  --ink:        #0A0F1E;
+  --ink-2:      #374151;
+  --ink-3:      #6B7280;
+  --cloud:      #F0F7FF;
+  --white:      #FFFFFF;
+  --amber:      #FEF3C7;
+  --amber-2:    #F59E0B;
+  --green:      #DCFCE7;
+  --green-2:    #16A34A;
+  --red:        #FEE2E2;
+  --red-2:      #DC2626;
 
-  --font-display: "Manrope", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  /* Typography */
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-body:    'DM Sans', system-ui, sans-serif;
+  --font-mono:    'DM Mono', 'Courier New', monospace;
+
+  /* Radii */
+  --r-sm:  6px;
+  --r-md:  10px;
+  --r-lg:  14px;
+  --r-xl:  18px;
+  --r-full: 9999px;
 }
 
-* {
-  box-sizing: border-box;
-}
+html { scroll-behavior: smooth; }
 
-html,
 body {
-  padding: 0;
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-display);
-}
-
-body {
+  font-family: var(--font-body);
+  background: var(--sky);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
 
-h1,
-h2,
-h3 {
-  font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  margin: 0;
-}
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.01em; }
 
-.mono {
-  font-family: var(--font-mono);
-}
+.mono { font-family: var(--font-mono); }
 
-a {
-  color: inherit;
-}
+a { color: inherit; }
 
-button {
-  font-family: var(--font-display);
-  cursor: pointer;
-}
-
-:focus-visible {
-  outline: 2px solid var(--teal);
-  outline-offset: 2px;
-}
+:focus-visible { outline: 2px solid var(--sky-dk); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
 
-/* --- Layout shell ------------------------------------------------------- */
-
-.shell {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 48px 20px 96px;
-}
-
-.hero {
-  margin-bottom: 40px;
-}
-
-.hero__wordmark {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.hero__tagline {
-  color: var(--text-muted);
-  font-size: 15px;
-  max-width: 46ch;
-  line-height: 1.5;
-  margin: 0;
-}
-
-.hero__address {
-  margin-top: 16px;
-  font-size: 12px;
-  color: var(--text-muted);
-  word-break: break-all;
-}
-
-.section-label {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin: 0 0 12px;
-}
-
-/* --- Split-flap tiles ----------------------------------------------------- */
-
-.flap-row {
+/* ── Badge ── */
+.badge {
   display: inline-flex;
-  gap: 2px;
-  flex-wrap: wrap;
-}
-
-.flap-tile {
-  display: inline-block;
-  min-width: 0.72em;
-  text-align: center;
-  padding: 3px 4px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: 3px;
+  align-items: center;
+  gap: 7px;
+  background: var(--white);
+  border: 1px solid var(--sky-md);
+  border-radius: var(--r-full);
+  padding: 5px 14px;
+  font-size: 11px;
   font-family: var(--font-mono);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  animation: flap-in 0.4s cubic-bezier(0.2, 0.6, 0.2, 1) backwards;
+  color: var(--teal);
 }
 
-@keyframes flap-in {
-  0% {
-    transform: rotateX(100deg);
-    opacity: 0;
-  }
-  55% {
-    transform: rotateX(-14deg);
-    opacity: 1;
-  }
-  100% {
-    transform: rotateX(0deg);
-    opacity: 1;
-  }
+.badge-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--teal);
+  animation: blink 2s ease-in-out infinite;
+  flex-shrink: 0;
 }
 
-/* --- Ticket / boarding-pass form ----------------------------------------- */
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 
-.ticket {
-  display: flex;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--r-md);
+  padding: 11px 22px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity .15s, background .15s;
+  white-space: nowrap;
+}
+
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.btn-primary   { background: var(--teal); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #0f766e; }
+
+.btn-secondary { background: var(--white); color: var(--ink-2); border: 1px solid var(--sky-md); }
+.btn-secondary:hover:not(:disabled) { border-color: var(--sky-dk); }
+
+.btn-dark      { background: var(--ink); color: #fff; }
+.btn-dark:hover:not(:disabled) { background: #1a2236; }
+
+.btn-sm { font-size: 13px; padding: 8px 16px; }
+.btn-lg { font-size: 15px; padding: 14px 28px; }
+
+/* ── Card ── */
+.card {
+  background: var(--white);
+  border: 1px solid var(--sky-md);
+  border-radius: var(--r-xl);
   overflow: hidden;
 }
 
-.ticket__stub {
-  flex: 1;
-  padding: 20px;
+.card-header {
+  background: var(--cloud);
+  padding: 13px 20px;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.ticket__coupon {
-  width: 200px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
   justify-content: space-between;
+  border-bottom: 1px solid var(--sky-md);
 }
 
-.ticket__perforation {
-  width: 0;
-  border-left: 2px dashed var(--border);
-  position: relative;
-}
+.card-body { padding: 20px; }
 
-.ticket__eyebrow {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--amber);
+.card-label {
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
-.ticket__row {
+/* ── Status pill ── */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  white-space: nowrap;
+}
+
+.status-active   { background: var(--teal-lt); color: var(--teal); }
+.status-claimed  { background: var(--green);   color: var(--green-2); }
+.status-expired  { background: #F3F4F6;        color: var(--ink-3); }
+.status-pending  { background: var(--amber);   color: var(--amber-2); }
+.status-unfunded { background: var(--red);     color: var(--red-2); }
+
+/* ── Form elements ── */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.hint  { font-size: 12px; color: var(--ink-3); }
+
+.input {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--sky-md);
+  border-radius: var(--r-md);
+  padding: 10px 14px;
+  width: 100%;
+  outline: none;
+  transition: border-color .15s;
+}
+
+.input:focus { border-color: var(--teal); }
+.input::placeholder { color: var(--ink-3); }
+
+/* ── Banners ── */
+.banner { padding: 12px 16px; border-radius: var(--r-md); font-size: 13px; line-height: 1.5; }
+.banner-error   { background: var(--red);   color: var(--red-2);   border: 1px solid #FCA5A5; }
+.banner-success { background: var(--green);  color: var(--green-2); border: 1px solid #86EFAC; }
+.banner-info    { background: var(--amber);  color: var(--amber-2); border: 1px solid #FCD34D; }
+
+/* ── Divider ── */
+.divider { height: 1px; background: var(--sky-md); width: 100%; }
+
+/* ── Spinner ── */
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  display: inline-block;
+}
+.spinner-teal { border-color: var(--teal-lt); border-top-color: var(--teal); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Layout ── */
+.container { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+.page-pad  { padding-top: 40px; padding-bottom: 60px; }
+
+/* ── Wingback-specific: flight list rows, empty state ── */
+.flight-row {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--sky-md);
+}
+.flight-row:last-child { border-bottom: none; }
+
+.flight-row__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
-.ticket__field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-muted);
-  flex: 1;
-}
+.flight-row__id { font-size: 11px; color: var(--ink-3); }
 
-.ticket__field input {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 9px 10px;
-  color: var(--text);
-  font-size: 14px;
-}
+.flight-row__amounts { font-size: 12px; color: var(--ink-3); }
 
-.ticket__field input:focus {
-  border-color: var(--teal);
-}
-
-@media (max-width: 560px) {
-  .ticket {
-    flex-direction: column;
-  }
-  .ticket__coupon {
-    width: auto;
-  }
-  .ticket__perforation {
-    display: none;
-  }
-}
-
-/* --- Board rows ------------------------------------------------------- */
-
-.board {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.board-row {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px 18px;
-  background: var(--bg-raised);
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px 16px;
-}
-
-.board-row__main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.board-row__flight {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-}
-
-.board-row__meta {
-  display: flex;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.board-row__id {
-  opacity: 0.6;
-}
-
-.board-row__status {
-  justify-self: end;
-}
-
-.board-row__detail {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.board-row__amounts {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.board-row__reasoning {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0;
-  line-height: 1.5;
-}
+.flight-row__reasoning { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
 
 .empty-state {
-  border: 1px dashed var(--border);
-  border-radius: 10px;
-  padding: 32px 20px;
+  padding: 36px 20px;
   text-align: center;
-  color: var(--text-muted);
+  color: var(--ink-3);
   font-size: 14px;
 }
 
-/* --- Buttons ------------------------------------------------------- */
-
-.btn {
-  border: none;
-  border-radius: 7px;
-  padding: 10px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  transition: opacity 0.15s ease, transform 0.1s ease;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn:not(:disabled):active {
-  transform: scale(0.98);
-}
-
-.btn--primary {
-  background: var(--amber);
-  color: #1a1204;
-}
-
-.btn--check {
-  background: transparent;
-  border: 1px solid var(--teal);
-  color: var(--teal);
-  align-self: flex-start;
-}
-
-.error-banner {
-  border: 1px solid var(--red);
-  background: rgba(239, 95, 95, 0.08);
-  color: var(--red);
-  border-radius: 8px;
-  padding: 12px 14px;
-  font-size: 13px;
-  margin-top: 16px;
+.ticket-divider {
+  width: 1px;
+  background: repeating-linear-gradient(to bottom, var(--sky-md) 0 6px, transparent 6px 12px);
 }

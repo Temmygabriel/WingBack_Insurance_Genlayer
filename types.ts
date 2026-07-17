@@ -18,6 +18,14 @@ export const STATUS_LABEL: Record<PolicyStatus, string> = {
   unresolved: "NO DATA YET",
 };
 
+export const STATUS_PILL_CLASS: Record<PolicyStatus, string> = {
+  active: "status-pending",
+  not_delayed: "status-expired",
+  paid: "status-claimed",
+  delayed_unfunded: "status-unfunded",
+  unresolved: "status-pending",
+};
+
 // Matches the exact JSON shape written by buy_policy / adjudicate_flight
 // in WingbackInsurance.py. Amounts are raw on-chain units (18 decimals, like wei).
 export interface Policy {
