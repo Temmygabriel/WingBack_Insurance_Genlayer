@@ -4,6 +4,7 @@ import { TransactionStatus } from "genlayer-js/types";
 import type { Policy } from "../types";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`;
+const RPC_ENDPOINT = process.env.NEXT_PUBLIC_GENLAYER_RPC_URL || "https://studio.genlayer.com:8443/api";
 const MAX_ATTEMPTS = 3;
 
 // --- Unit conversion: GEN uses 18 decimals, like wei. -----------------------
@@ -28,7 +29,7 @@ export function fromRawUnits(raw: number | string): string {
 // --- Core client + account plumbing — do not change ------------------------
 
 function makeClient(account: ReturnType<typeof createAccount>) {
-  return createClient({ chain: studionet, account });
+  return createClient({ chain: studionet, endpoint: RPC_ENDPOINT, account });
 }
 
 export function makeAccount(privateKey?: `0x${string}`) {
