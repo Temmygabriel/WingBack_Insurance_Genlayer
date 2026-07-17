@@ -118,10 +118,6 @@ export default function App() {
   return (
     <div className="container page-pad">
       <header style={{ marginBottom: 36 }}>
-        <div className="badge" style={{ marginBottom: 16 }}>
-          <span className="badge-dot" />
-          GenLayer Studionet
-        </div>
         <h1 style={{ fontSize: 40, marginBottom: 14 }}>Wingback</h1>
         <p style={{ color: "var(--ink-2)", maxWidth: "52ch", lineHeight: 1.6, fontSize: 15 }}>
           Register a flight. When it lands, GenLayer's validators independently check real flight data
