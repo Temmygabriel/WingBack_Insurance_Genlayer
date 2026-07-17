@@ -1,0 +1,340 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@400;500;600;800&display=swap");
+
+:root {
+  --bg: #0b1220;
+  --bg-raised: #121b2e;
+  --text: #e8ecf1;
+  --text-muted: #8a93a6;
+  --amber: #f2a33c;
+  --teal: #4ecdc4;
+  --red: #ef5f5f;
+  --border: #1f2b45;
+
+  --font-display: "Manrope", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-display);
+}
+
+body {
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font-family: var(--font-display);
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* --- Layout shell ------------------------------------------------------- */
+
+.shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 20px 96px;
+}
+
+.hero {
+  margin-bottom: 40px;
+}
+
+.hero__wordmark {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.hero__tagline {
+  color: var(--text-muted);
+  font-size: 15px;
+  max-width: 46ch;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.hero__address {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.section-label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+/* --- Split-flap tiles ----------------------------------------------------- */
+
+.flap-row {
+  display: inline-flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.flap-tile {
+  display: inline-block;
+  min-width: 0.72em;
+  text-align: center;
+  padding: 3px 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  animation: flap-in 0.4s cubic-bezier(0.2, 0.6, 0.2, 1) backwards;
+}
+
+@keyframes flap-in {
+  0% {
+    transform: rotateX(100deg);
+    opacity: 0;
+  }
+  55% {
+    transform: rotateX(-14deg);
+    opacity: 1;
+  }
+  100% {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+}
+
+/* --- Ticket / boarding-pass form ----------------------------------------- */
+
+.ticket {
+  display: flex;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ticket__stub {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ticket__coupon {
+  width: 200px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.ticket__perforation {
+  width: 0;
+  border-left: 2px dashed var(--border);
+  position: relative;
+}
+
+.ticket__eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.ticket__row {
+  display: flex;
+  gap: 12px;
+}
+
+.ticket__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.ticket__field input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 10px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.ticket__field input:focus {
+  border-color: var(--teal);
+}
+
+@media (max-width: 560px) {
+  .ticket {
+    flex-direction: column;
+  }
+  .ticket__coupon {
+    width: auto;
+  }
+  .ticket__perforation {
+    display: none;
+  }
+}
+
+/* --- Board rows ------------------------------------------------------- */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.board-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  background: var(--bg-raised);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 16px;
+}
+
+.board-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.board-row__flight {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.board-row__meta {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.board-row__id {
+  opacity: 0.6;
+}
+
+.board-row__status {
+  justify-self: end;
+}
+
+.board-row__detail {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.board-row__amounts {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.board-row__reasoning {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.empty-state {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* --- Buttons ------------------------------------------------------- */
+
+.btn {
+  border: none;
+  border-radius: 7px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+.btn--primary {
+  background: var(--amber);
+  color: #1a1204;
+}
+
+.btn--check {
+  background: transparent;
+  border: 1px solid var(--teal);
+  color: var(--teal);
+  align-self: flex-start;
+}
+
+.error-banner {
+  border: 1px solid var(--red);
+  background: rgba(239, 95, 95, 0.08);
+  color: var(--red);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  margin-top: 16px;
+}
