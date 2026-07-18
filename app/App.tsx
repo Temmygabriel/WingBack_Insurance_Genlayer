@@ -99,13 +99,13 @@ export default function App() {
     }
   }
 
-  async function handleAdjudicate(policyId: string) {
+  async function handleAdjudicate(policyId: string, narrative: string) {
     if (!accountRef.current || adjudicatingRef.current.has(policyId)) return;
     adjudicatingRef.current.add(policyId);
     setAdjudicatingIds(new Set(adjudicatingRef.current));
     setError("");
     try {
-      await adjudicateFlight(accountRef.current, policyId);
+      await adjudicateFlight(accountRef.current, policyId, narrative);
       await refreshPolicies();
     } catch {
       setError("Adjudication is taking longer than expected. It may still land on-chain — refresh in a minute.");

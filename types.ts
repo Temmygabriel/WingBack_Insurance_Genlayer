@@ -6,16 +6,18 @@ export const POLICY_STATUS = {
   PAID: "paid",
   DELAYED_UNFUNDED: "delayed_unfunded",
   UNRESOLVED: "unresolved",
+  FLAGGED_INCONSISTENT: "flagged_inconsistent",
 } as const;
 
 export type PolicyStatus = (typeof POLICY_STATUS)[keyof typeof POLICY_STATUS];
 
 export const STATUS_LABEL: Record<PolicyStatus, string> = {
-  active: "AWAITING FLIGHT",
+  active: "AWAITING CLAIM",
   not_delayed: "ON TIME",
   paid: "DELAYED · PAID",
   delayed_unfunded: "DELAYED · UNFUNDED",
   unresolved: "NO DATA YET",
+  flagged_inconsistent: "FLAGGED FOR REVIEW",
 };
 
 export const STATUS_PILL_CLASS: Record<PolicyStatus, string> = {
@@ -24,6 +26,7 @@ export const STATUS_PILL_CLASS: Record<PolicyStatus, string> = {
   paid: "status-claimed",
   delayed_unfunded: "status-unfunded",
   unresolved: "status-pending",
+  flagged_inconsistent: "status-unfunded",
 };
 
 // Matches the exact JSON shape written by buy_policy / adjudicate_flight
@@ -41,6 +44,8 @@ export interface Policy {
   flight_status: string;
   departure_delay_minutes: number | null;
   arrival_delay_minutes: number | null;
+  claim_narrative: string;
+  narrative_consistent: boolean | null;
   reasoning: string;
   sources_used: string[];
   paid_out: number;

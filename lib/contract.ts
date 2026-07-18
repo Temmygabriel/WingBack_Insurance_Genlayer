@@ -169,9 +169,10 @@ export async function buyPolicy(
 
 export async function adjudicateFlight(
   account: ReturnType<typeof createAccount>,
-  policyId: string
+  policyId: string,
+  claimNarrative: string
 ): Promise<void> {
-  return writeContract(account, "adjudicate_flight", [policyId]);
+  return writeContract(account, "adjudicate_flight", [policyId, claimNarrative]);
 }
 
 export async function getPolicy(policyId: string): Promise<Policy> {
