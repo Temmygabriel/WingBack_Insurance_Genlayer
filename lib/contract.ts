@@ -88,8 +88,6 @@ export async function writeContractWithReturn(
       };
       if (value !== undefined) simParams.value = value.toString();
 
-      console.log("WINGBACK DEBUG — simParams about to be sent:", JSON.stringify(simParams, (_k, v) => typeof v === "bigint" ? v.toString() : v));
-
       // simulateWriteContract gets the return value without waiting for consensus
       const returnValue = await client.simulateWriteContract(simParams as any);
 
@@ -111,11 +109,6 @@ export async function writeContractWithReturn(
       });
       return returnValue as string;
     } catch (err: any) {
-      console.error("WINGBACK DEBUG — raw error caught:", err);
-      console.error("WINGBACK DEBUG — error.message:", err?.message);
-      console.error("WINGBACK DEBUG — error.cause:", err?.cause);
-      console.error("WINGBACK DEBUG — error.details:", err?.details);
-      console.error("WINGBACK DEBUG — full keys:", Object.getOwnPropertyNames(err || {}));
       if (attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, attempt * 3000));
         continue;
@@ -159,8 +152,14 @@ export async function buyPolicy(
   departureDate: string,
   departureTs: number,
   premiumGen: string
-): Promise<string> {
-  return writeContractWithReturn(
+): Promise<void> {
+  // NOTE: deliberately using writeContract, not writeContractWithReturn.
+  // simulateWriteContract does not honor the `value` field, so simulating
+  // this call sees a zero premium and buy_policy's own zero-premium check
+  // rejects it — even though the real write would have carried real value.
+  // We don't use the returned policy_id anyway; refreshPolicies() re-reads
+  // the full list from chain state right after this call.
+  return writeContract(
     account,
     "buy_policy",
     [flightNumber, departureDate, String(departureTs)], // String() for int params, per build guide lesson
