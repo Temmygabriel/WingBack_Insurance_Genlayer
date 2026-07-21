@@ -294,6 +294,146 @@ a { color: inherit; }
   flex-shrink: 0;
 }
 .icon-btn:hover { border-color: var(--sky-dk); }
+
+/* ── Bold header band (Option B) ── */
+.hero-band {
+  background: #085041;
+  border-radius: 14px 14px 0 0;
+  padding: 28px 28px 64px;
+  margin-bottom: -40px;
+}
+
+.hero-band__wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.hero-band__wordmark span {
+  font-family: var(--font-display);
+  font-size: 30px;
+  color: #fff;
+}
+
+.hero-band__tagline {
+  font-size: 14px;
+  color: #99F6E4;
+  line-height: 1.6;
+  max-width: 46ch;
+  margin: 0;
+}
+
+.hero-content {
+  background: var(--white);
+  border-radius: 0 0 14px 14px;
+  padding: 0 4px 4px;
+  position: relative;
+}
+
+/* ── How it works strip ── */
+.how-it-works {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.how-step {
+  background: var(--cloud);
+  border: 1px solid var(--sky-md);
+  border-radius: var(--r-md);
+  padding: 14px;
+}
+
+.how-step-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--teal);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.how-step-label {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  .how-it-works { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Toast ── */
+.toast {
+  background: var(--teal-lt);
+  border: 1px solid var(--teal-md);
+  color: #085041;
+  border-radius: var(--r-md);
+  padding: 12px 16px;
+  font-size: 13px;
+  margin-bottom: 20px;
+  animation: toast-in .25s ease;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Filter chips ── */
+.chip-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.chip {
+  border: 1px solid var(--sky-md);
+  background: var(--white);
+  border-radius: var(--r-full);
+  padding: 6px 14px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.chip.active {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+/* ── Adjudication progress ── */
+.progress-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.progress-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.progress-step.done { color: var(--teal); }
+.progress-step.current { color: var(--ink); font-weight: 600; }
+
+.progress-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sky-md);
+  flex-shrink: 0;
+}
+
+.progress-step.done .progress-dot { background: var(--teal); }
+.progress-step.current .progress-dot { background: var(--amber-2); animation: blink 1.4s ease-in-out infinite; }
+
 .flight-row {
   display: flex;
   flex-direction: column;

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { fromRawUnits } from "../lib/contract";
 import { POLICY_STATUS, STATUS_LABEL, STATUS_PILL_CLASS } from "../types";
 import type { Policy } from "../types";
+import { AdjudicationProgress } from "./AdjudicationProgress";
 
 export function PolicyCard({
   policy,
@@ -47,7 +48,9 @@ export function PolicyCard({
         </>
       )}
 
-      {isActive && (
+      {isActive && checking && <AdjudicationProgress />}
+
+      {isActive && !checking && (
         <div className="field">
           <span className="label">Describe what happened</span>
           <textarea
@@ -61,10 +64,9 @@ export function PolicyCard({
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => onCheck(policy.policy_id, narrative)}
-              disabled={checking || !narrative.trim()}
+              disabled={!narrative.trim()}
             >
-              {checking && <span className="spinner spinner-teal" style={{ width: 12, height: 12 }} />}
-              {checking ? "Adjudicating — 3–5 min…" : "File claim"}
+              File claim
             </button>
           </div>
         </div>

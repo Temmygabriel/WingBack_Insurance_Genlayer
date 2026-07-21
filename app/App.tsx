@@ -7,30 +7,43 @@ import {
   getPoliciesForHolder,
 } from "../lib/contract";
 import type { Policy } from "../types";
+import { POLICY_STATUS } from "../types";
 import { BuyForm } from "../components/BuyForm";
 import { PolicyCard } from "../components/PolicyCard";
 import { AccountView } from "../components/AccountView";
+import { HowItWorks } from "../components/HowItWorks";
+import { Logo } from "../components/Logo";
 
 const POLL_INTERVAL = 8000;
 type Tab = "register" | "policies" | "account";
+type FlightFilter = "active" | "resolved";
 
 export default function App() {
   const accountRef = useRef<ReturnType<typeof makeAccount> | null>(null);
   const addressRef = useRef<string>("");
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const adjudicatingRef = useRef<Set<string>>(new Set());
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [tab, setTab] = useState<Tab>("register");
+  const [flightFilter, setFlightFilter] = useState<FlightFilter>("active");
   const [address, setAddress] = useState<string>("");
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [loadingPolicies, setLoadingPolicies] = useState(true);
   const [buying, setBuying] = useState(false);
   const [adjudicatingIds, setAdjudicatingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string>("");
+  const [toast, setToast] = useState<string>("");
 
   const [flightNumber, setFlightNumber] = useState("");
   const [departureDate, setDepartureDate] = useState("");
   const [premium, setPremium] = useState("1");
+
+  function showToast(msg: string) {
+    setToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(""), 5000);
+  }
 
   useEffect(() => {
     let acc: ReturnType<typeof makeAccount>;
@@ -92,6 +105,8 @@ export default function App() {
       setFlightNumber("");
       await refreshPolicies();
       setTab("policies");
+      setFlightFilter("active");
+      showToast("Flight registered. File a claim once it's landed.");
     } catch (err: any) {
       setError(
         err?.message
@@ -111,6 +126,8 @@ export default function App() {
     try {
       await adjudicateFlight(accountRef.current, policyId, narrative);
       await refreshPolicies();
+      setFlightFilter("resolved");
+      showToast("Claim reconciled. See the verdict below.");
     } catch {
       setError("Adjudication is taking longer than expected. It may still land on-chain — refresh in a minute.");
     } finally {
@@ -119,76 +136,103 @@ export default function App() {
     }
   }
 
+  const activeFlights = policies.filter((p) => p.status === POLICY_STATUS.ACTIVE);
+  const resolvedFlights = policies.filter((p) => p.status !== POLICY_STATUS.ACTIVE);
+  const shownFlights = flightFilter === "active" ? activeFlights : resolvedFlights;
+
   return (
     <div className="container page-pad">
-      <header style={{ marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 36, marginBottom: 8 }}>Wingback</h1>
-          <p style={{ color: "var(--ink-2)", maxWidth: "48ch", lineHeight: 1.6, fontSize: 14 }}>
-            Register a flight, file a claim after it lands, and let GenLayer's validators reconcile
-            your account against the official record — independently, with the reasoning kept on-chain.
-          </p>
+      <div className="hero-band">
+        <div className="hero-band__wordmark">
+          <Logo size={30} />
+          <span>Wingback</span>
         </div>
+        <p className="hero-band__tagline">
+          Register a flight, file a claim after it lands, and let GenLayer's validators reconcile
+          your account against the official record — independently, with the reasoning kept on-chain.
+        </p>
+      </div>
 
-        <nav className="tab-bar">
-          <button className={`tab-btn ${tab === "register" ? "active" : ""}`} onClick={() => setTab("register")}>
-            Register
-          </button>
-          <button className={`tab-btn ${tab === "policies" ? "active" : ""}`} onClick={() => setTab("policies")}>
-            My Flights{policies.length > 0 ? ` (${policies.length})` : ""}
-          </button>
-          <button className={`tab-btn ${tab === "account" ? "active" : ""}`} onClick={() => setTab("account")}>
-            Account
-          </button>
-        </nav>
-      </header>
+      <div className="hero-content">
+        <div style={{ padding: "20px 20px 0" }}>
+          <nav className="tab-bar" style={{ marginBottom: 20 }}>
+            <button className={`tab-btn ${tab === "register" ? "active" : ""}`} onClick={() => setTab("register")}>
+              Register
+            </button>
+            <button className={`tab-btn ${tab === "policies" ? "active" : ""}`} onClick={() => setTab("policies")}>
+              My Flights{policies.length > 0 ? ` (${policies.length})` : ""}
+            </button>
+            <button className={`tab-btn ${tab === "account" ? "active" : ""}`} onClick={() => setTab("account")}>
+              Account
+            </button>
+          </nav>
 
-      {error && <div className="banner banner-error" style={{ marginBottom: 20 }}>{error}</div>}
+          {toast && <div className="toast">{toast}</div>}
+          {error && <div className="banner banner-error" style={{ marginBottom: 20 }}>{error}</div>}
 
-      {tab === "register" && (
-        <BuyForm
-          flightNumber={flightNumber}
-          departureDate={departureDate}
-          premium={premium}
-          buying={buying}
-          onFlightNumberChange={setFlightNumber}
-          onDepartureDateChange={setDepartureDate}
-          onPremiumChange={setPremium}
-          onSubmit={handleBuyPolicy}
-        />
-      )}
+          {tab === "register" && (
+            <>
+              <HowItWorks />
+              <BuyForm
+                flightNumber={flightNumber}
+                departureDate={departureDate}
+                premium={premium}
+                buying={buying}
+                onFlightNumberChange={setFlightNumber}
+                onDepartureDateChange={setDepartureDate}
+                onPremiumChange={setPremium}
+                onSubmit={handleBuyPolicy}
+              />
+            </>
+          )}
 
-      {tab === "policies" && (
-        <div>
-          {loadingPolicies && <p className="hint">Loading…</p>}
-
-          {!loadingPolicies && policies.length === 0 && (
-            <div className="card">
-              <div className="empty-state">
-                No flights registered yet.{" "}
-                <button className="tab-btn active" style={{ padding: "4px 12px" }} onClick={() => setTab("register")}>
-                  Register one
+          {tab === "policies" && (
+            <div>
+              <div className="chip-row">
+                <button
+                  className={`chip ${flightFilter === "active" ? "active" : ""}`}
+                  onClick={() => setFlightFilter("active")}
+                >
+                  Awaiting claim ({activeFlights.length})
+                </button>
+                <button
+                  className={`chip ${flightFilter === "resolved" ? "active" : ""}`}
+                  onClick={() => setFlightFilter("resolved")}
+                >
+                  Resolved ({resolvedFlights.length})
                 </button>
               </div>
+
+              {loadingPolicies && <p className="hint">Loading…</p>}
+
+              {!loadingPolicies && shownFlights.length === 0 && (
+                <div className="card">
+                  <div className="empty-state">
+                    {flightFilter === "active"
+                      ? "No flights awaiting a claim right now."
+                      : "No resolved claims yet."}
+                  </div>
+                </div>
+              )}
+
+              {shownFlights.length > 0 && (
+                <div className="card">
+                  {shownFlights.map((p) => (
+                    <PolicyCard
+                      key={p.policy_id}
+                      policy={p}
+                      onCheck={handleAdjudicate}
+                      checking={adjudicatingIds.has(p.policy_id)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {policies.length > 0 && (
-            <div className="card">
-              {policies.map((p) => (
-                <PolicyCard
-                  key={p.policy_id}
-                  policy={p}
-                  onCheck={handleAdjudicate}
-                  checking={adjudicatingIds.has(p.policy_id)}
-                />
-              ))}
-            </div>
-          )}
+          {tab === "account" && <AccountView address={address} policies={policies} />}
         </div>
-      )}
-
-      {tab === "account" && <AccountView address={address} policies={policies} />}
+      </div>
     </div>
   );
 }
