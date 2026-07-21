@@ -9,8 +9,10 @@ import {
 import type { Policy } from "../types";
 import { BuyForm } from "../components/BuyForm";
 import { PolicyCard } from "../components/PolicyCard";
+import { AccountView } from "../components/AccountView";
 
 const POLL_INTERVAL = 8000;
+type Tab = "register" | "policies" | "account";
 
 export default function App() {
   const accountRef = useRef<ReturnType<typeof makeAccount> | null>(null);
@@ -18,6 +20,7 @@ export default function App() {
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const adjudicatingRef = useRef<Set<string>>(new Set());
 
+  const [tab, setTab] = useState<Tab>("register");
   const [address, setAddress] = useState<string>("");
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [loadingPolicies, setLoadingPolicies] = useState(true);
@@ -88,6 +91,7 @@ export default function App() {
       await buyPolicy(accountRef.current, flightNumber.trim().toUpperCase(), departureDate, departureTs, premium);
       setFlightNumber("");
       await refreshPolicies();
+      setTab("policies");
     } catch (err: any) {
       setError(
         err?.message
@@ -117,56 +121,74 @@ export default function App() {
 
   return (
     <div className="container page-pad">
-      <header style={{ marginBottom: 36 }}>
-        <h1 style={{ fontSize: 40, marginBottom: 14 }}>Wingback</h1>
-        <p style={{ color: "var(--ink-2)", maxWidth: "52ch", lineHeight: 1.6, fontSize: 15 }}>
-          Register a flight. When it lands, GenLayer's validators independently check real flight data
-          and reach consensus on a verdict — delayed or not — with the reasoning kept on-chain.
-        </p>
-        {address && (
-          <p className="mono hint" style={{ marginTop: 14, wordBreak: "break-all" }}>{address}</p>
-        )}
+      <header style={{ marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 36, marginBottom: 8 }}>Wingback</h1>
+          <p style={{ color: "var(--ink-2)", maxWidth: "48ch", lineHeight: 1.6, fontSize: 14 }}>
+            Register a flight, file a claim after it lands, and let GenLayer's validators reconcile
+            your account against the official record — independently, with the reasoning kept on-chain.
+          </p>
+        </div>
+
+        <nav className="tab-bar">
+          <button className={`tab-btn ${tab === "register" ? "active" : ""}`} onClick={() => setTab("register")}>
+            Register
+          </button>
+          <button className={`tab-btn ${tab === "policies" ? "active" : ""}`} onClick={() => setTab("policies")}>
+            My Flights{policies.length > 0 ? ` (${policies.length})` : ""}
+          </button>
+          <button className={`tab-btn ${tab === "account" ? "active" : ""}`} onClick={() => setTab("account")}>
+            Account
+          </button>
+        </nav>
       </header>
 
-      <BuyForm
-        flightNumber={flightNumber}
-        departureDate={departureDate}
-        premium={premium}
-        buying={buying}
-        onFlightNumberChange={setFlightNumber}
-        onDepartureDateChange={setDepartureDate}
-        onPremiumChange={setPremium}
-        onSubmit={handleBuyPolicy}
-      />
+      {error && <div className="banner banner-error" style={{ marginBottom: 20 }}>{error}</div>}
 
-      {error && <div className="banner banner-error" style={{ marginTop: 16 }}>{error}</div>}
+      {tab === "register" && (
+        <BuyForm
+          flightNumber={flightNumber}
+          departureDate={departureDate}
+          premium={premium}
+          buying={buying}
+          onFlightNumberChange={setFlightNumber}
+          onDepartureDateChange={setDepartureDate}
+          onPremiumChange={setPremium}
+          onSubmit={handleBuyPolicy}
+        />
+      )}
 
-      <div style={{ marginTop: 36 }}>
-        <p className="card-label" style={{ marginBottom: 12 }}>Your flights</p>
+      {tab === "policies" && (
+        <div>
+          {loadingPolicies && <p className="hint">Loading…</p>}
 
-        {loadingPolicies && <p className="hint">Loading…</p>}
-
-        {!loadingPolicies && policies.length === 0 && (
-          <div className="card">
-            <div className="empty-state">
-              No flights registered yet. Register one above — you'll be able to request a verdict once it's landed.
+          {!loadingPolicies && policies.length === 0 && (
+            <div className="card">
+              <div className="empty-state">
+                No flights registered yet.{" "}
+                <button className="tab-btn active" style={{ padding: "4px 12px" }} onClick={() => setTab("register")}>
+                  Register one
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {policies.length > 0 && (
-          <div className="card">
-            {policies.map((p) => (
-              <PolicyCard
-                key={p.policy_id}
-                policy={p}
-                onCheck={handleAdjudicate}
-                checking={adjudicatingIds.has(p.policy_id)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+          {policies.length > 0 && (
+            <div className="card">
+              {policies.map((p) => (
+                <PolicyCard
+                  key={p.policy_id}
+                  policy={p}
+                  onCheck={handleAdjudicate}
+                  checking={adjudicatingIds.has(p.policy_id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "account" && <AccountView address={address} policies={policies} />}
     </div>
   );
 }
