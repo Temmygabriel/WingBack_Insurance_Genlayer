@@ -18,6 +18,11 @@ const POLL_INTERVAL = 8000;
 type Tab = "register" | "policies" | "account";
 type FlightFilter = "active" | "resolved";
 
+function shortAddress(addr: string) {
+  if (!addr) return "";
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
 export default function App() {
   const accountRef = useRef<ReturnType<typeof makeAccount> | null>(null);
   const addressRef = useRef<string>("");
@@ -140,99 +145,110 @@ export default function App() {
   const resolvedFlights = policies.filter((p) => p.status !== POLICY_STATUS.ACTIVE);
   const shownFlights = flightFilter === "active" ? activeFlights : resolvedFlights;
 
+  const PAGE_COPY: Record<Tab, { title: string; sub: string }> = {
+    register: {
+      title: "Register a flight",
+      sub: "Pay a small GEN premium to open a claim window for a flight. Nothing else happens until you file a claim after it lands.",
+    },
+    policies: {
+      title: "My Flights",
+      sub: "Everything you've registered, and the verdict once a claim has been reconciled.",
+    },
+    account: {
+      title: "Account",
+      sub: "Your studionet wallet, generated locally in this browser.",
+    },
+  };
+
   return (
     <div className="container page-pad">
-      <div className="hero-band">
-        <div className="hero-band__wordmark">
-          <Logo size={30} />
+      <div className="app-topbar">
+        <div className="app-topbar__brand">
+          <Logo size={22} />
           <span>Wingback</span>
         </div>
-        <p className="hero-band__tagline">
-          Register a flight, file a claim after it lands, and let GenLayer's validators reconcile
-          your account against the official record — independently, with the reasoning kept on-chain.
-        </p>
+        <nav className="tab-bar">
+          <button className={`tab-btn ${tab === "register" ? "active" : ""}`} onClick={() => setTab("register")}>
+            Register
+          </button>
+          <button className={`tab-btn ${tab === "policies" ? "active" : ""}`} onClick={() => setTab("policies")}>
+            My Flights{policies.length > 0 ? ` (${policies.length})` : ""}
+          </button>
+        </nav>
+        <button className="app-topbar__account" onClick={() => setTab("account")}>
+          {shortAddress(address) || "Setting up…"}
+        </button>
       </div>
 
-      <div className="hero-content">
-        <div style={{ padding: "20px 20px 0" }}>
-          <nav className="tab-bar" style={{ marginBottom: 20 }}>
-            <button className={`tab-btn ${tab === "register" ? "active" : ""}`} onClick={() => setTab("register")}>
-              Register
-            </button>
-            <button className={`tab-btn ${tab === "policies" ? "active" : ""}`} onClick={() => setTab("policies")}>
-              My Flights{policies.length > 0 ? ` (${policies.length})` : ""}
-            </button>
-            <button className={`tab-btn ${tab === "account" ? "active" : ""}`} onClick={() => setTab("account")}>
-              Account
-            </button>
-          </nav>
+      {toast && <div className="toast">{toast}</div>}
+      {error && <div className="banner banner-error" style={{ marginBottom: 20 }}>{error}</div>}
 
-          {toast && <div className="toast">{toast}</div>}
-          {error && <div className="banner banner-error" style={{ marginBottom: 20 }}>{error}</div>}
+      <div className="page-header">
+        <h2>{PAGE_COPY[tab].title}</h2>
+        <p>{PAGE_COPY[tab].sub}</p>
+      </div>
 
-          {tab === "register" && (
-            <>
-              <HowItWorks />
-              <BuyForm
-                flightNumber={flightNumber}
-                departureDate={departureDate}
-                premium={premium}
-                buying={buying}
-                onFlightNumberChange={setFlightNumber}
-                onDepartureDateChange={setDepartureDate}
-                onPremiumChange={setPremium}
-                onSubmit={handleBuyPolicy}
-              />
-            </>
-          )}
+      {tab === "register" && (
+        <>
+          <HowItWorks />
+          <BuyForm
+            flightNumber={flightNumber}
+            departureDate={departureDate}
+            premium={premium}
+            buying={buying}
+            onFlightNumberChange={setFlightNumber}
+            onDepartureDateChange={setDepartureDate}
+            onPremiumChange={setPremium}
+            onSubmit={handleBuyPolicy}
+          />
+        </>
+      )}
 
-          {tab === "policies" && (
-            <div>
-              <div className="chip-row">
-                <button
-                  className={`chip ${flightFilter === "active" ? "active" : ""}`}
-                  onClick={() => setFlightFilter("active")}
-                >
-                  Awaiting claim ({activeFlights.length})
-                </button>
-                <button
-                  className={`chip ${flightFilter === "resolved" ? "active" : ""}`}
-                  onClick={() => setFlightFilter("resolved")}
-                >
-                  Resolved ({resolvedFlights.length})
-                </button>
+      {tab === "policies" && (
+        <div>
+          <div className="chip-row">
+            <button
+              className={`chip ${flightFilter === "active" ? "active" : ""}`}
+              onClick={() => setFlightFilter("active")}
+            >
+              Awaiting claim ({activeFlights.length})
+            </button>
+            <button
+              className={`chip ${flightFilter === "resolved" ? "active" : ""}`}
+              onClick={() => setFlightFilter("resolved")}
+            >
+              Resolved ({resolvedFlights.length})
+            </button>
+          </div>
+
+          {loadingPolicies && <p className="hint">Loading…</p>}
+
+          {!loadingPolicies && shownFlights.length === 0 && (
+            <div className="card">
+              <div className="empty-state">
+                {flightFilter === "active"
+                  ? "No flights awaiting a claim right now."
+                  : "No resolved claims yet."}
               </div>
-
-              {loadingPolicies && <p className="hint">Loading…</p>}
-
-              {!loadingPolicies && shownFlights.length === 0 && (
-                <div className="card">
-                  <div className="empty-state">
-                    {flightFilter === "active"
-                      ? "No flights awaiting a claim right now."
-                      : "No resolved claims yet."}
-                  </div>
-                </div>
-              )}
-
-              {shownFlights.length > 0 && (
-                <div className="card">
-                  {shownFlights.map((p) => (
-                    <PolicyCard
-                      key={p.policy_id}
-                      policy={p}
-                      onCheck={handleAdjudicate}
-                      checking={adjudicatingIds.has(p.policy_id)}
-                    />
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
-          {tab === "account" && <AccountView address={address} policies={policies} />}
+          {shownFlights.length > 0 && (
+            <div className="card">
+              {shownFlights.map((p) => (
+                <PolicyCard
+                  key={p.policy_id}
+                  policy={p}
+                  onCheck={handleAdjudicate}
+                  checking={adjudicatingIds.has(p.policy_id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      )}
+
+      {tab === "account" && <AccountView address={address} policies={policies} />}
     </div>
   );
 }
