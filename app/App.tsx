@@ -33,6 +33,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("register");
   const [flightFilter, setFlightFilter] = useState<FlightFilter>("active");
   const [address, setAddress] = useState<string>("");
+  const [privateKey, setPrivateKey] = useState<string>("");
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [loadingPolicies, setLoadingPolicies] = useState(true);
   const [buying, setBuying] = useState(false);
@@ -50,32 +51,40 @@ export default function App() {
     toastTimerRef.current = setTimeout(() => setToast(""), 5000);
   }
 
-  useEffect(() => {
+  function loadAccount(forcedKey?: `0x${string}`) {
     let acc: ReturnType<typeof makeAccount>;
-    const savedKey = localStorage.getItem("wingback_private_key");
+    const savedKey = forcedKey || (localStorage.getItem("wingback_private_key") as `0x${string}` | null);
 
     try {
       if (savedKey && savedKey !== "undefined" && savedKey !== "null" && savedKey.startsWith("0x")) {
-        acc = makeAccount(savedKey as `0x${string}`);
+        acc = makeAccount(savedKey);
       } else {
-        if (savedKey !== null) {
-          localStorage.removeItem("wingback_private_key");
-          localStorage.removeItem("wingback_address");
-        }
         acc = makeAccount();
-        localStorage.setItem("wingback_private_key", acc.privateKey);
       }
     } catch {
-      localStorage.removeItem("wingback_private_key");
-      localStorage.removeItem("wingback_address");
       acc = makeAccount();
-      localStorage.setItem("wingback_private_key", acc.privateKey);
     }
 
+    localStorage.setItem("wingback_private_key", acc.privateKey);
+    localStorage.setItem("wingback_address", acc.address);
     accountRef.current = acc;
     addressRef.current = acc.address;
-    localStorage.setItem("wingback_address", acc.address);
     setAddress(acc.address);
+    setPrivateKey(acc.privateKey);
+    setLoadingPolicies(true);
+    setPolicies([]);
+    return acc;
+  }
+
+  function handleImportAccount(key: string) {
+    loadAccount(key as `0x${string}`);
+    setTab("policies");
+    setFlightFilter("active");
+    showToast("Account imported. Loading its flights…");
+  }
+
+  useEffect(() => {
+    loadAccount();
   }, []);
 
   async function refreshPolicies() {
@@ -248,7 +257,9 @@ export default function App() {
         </div>
       )}
 
-      {tab === "account" && <AccountView address={address} policies={policies} />}
+      {tab === "account" && (
+        <AccountView address={address} privateKey={privateKey} policies={policies} onImport={handleImportAccount} />
+      )}
     </div>
   );
 }
