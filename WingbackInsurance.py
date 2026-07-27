@@ -13,9 +13,18 @@ class WingbackInsurance(gl.Contract):
     policy_count: u256
     policies: TreeMap[str, str]
     holder_policies: TreeMap[str, str]
+    aviationstack_key: str
 
     def __init__(self):
         self.policy_count = u256(0)
+        self.aviationstack_key = "d3e89e21d8629497a38527e7d90dc237"
+
+    @gl.public.write
+    def set_aviationstack_key(self, new_key: str) -> None:
+        # Lets the API key be rotated without redeploying the whole contract.
+        # NOTE: this has no access control — anyone can call it. Fine for a
+        # demo on a free-tier key; would need an owner check before any real use.
+        self.aviationstack_key = new_key
 
     def _read_policy(self, policy_id: str) -> dict:
         return json.loads(self.policies[policy_id])
@@ -67,6 +76,8 @@ class WingbackInsurance(gl.Contract):
             "flight_status": "",
             "departure_delay_minutes": None,
             "arrival_delay_minutes": None,
+            "claim_narrative": "",
+            "narrative_consistent": None,
             "reasoning": "",
             "sources_used": [],
             "paid_out": 0,
@@ -76,15 +87,18 @@ class WingbackInsurance(gl.Contract):
         return policy_id
 
     @gl.public.write
-    def adjudicate_flight(self, policy_id: str) -> None:
+    def adjudicate_flight(self, policy_id: str, claim_narrative: str) -> None:
         policy = self._read_policy(policy_id)
 
         if policy["status"] != "active":
             return
 
+        if not claim_narrative.strip():
+            raise gl.vm.UserError("A claim narrative is required — describe what happened in your own words")
+
         flight = policy["flight_number"]
 
-        api_key = "5069d86b489690492dfed8427baba78b"
+        api_key = self.aviationstack_key
         url = "https://api.aviationstack.com/v1/flights?access_key=" + api_key + "&flight_iata=" + flight
 
         def generate():
@@ -95,31 +109,40 @@ class WingbackInsurance(gl.Contract):
                 body_text = None
 
             if not body_text:
-                relay_prompt = "The API request failed. Respond with exactly this JSON: {\"flight_status\": \"unknown\", \"departure_delay\": null, \"arrival_delay\": null, \"looks_relevant\": false}"
+                relay_prompt = "The API request failed. Respond with exactly this JSON: {\"flight_status\": \"unknown\", \"departure_delay\": null, \"arrival_delay\": null, \"looks_relevant\": false, \"narrative_consistent\": false, \"consistency_reasoning\": \"No official record could be retrieved to check the claim against.\"}"
             else:
                 snippet_input = body_text[:4000]
-                relay_prompt = f"""Below is a raw JSON API response for a flight status lookup. It may contain multiple
-records for this flight number on different dates, since the airline reuses this flight number daily.
+                relay_prompt = f"""You are adjudicating a flight-delay insurance claim. There are two pieces of evidence below:
+an official flight-status record (objective, from an aviation data provider) and the claimant's own written
+account of what happened (subjective, could be honest, mistaken, or exaggerated).
 
-Select EXACTLY ONE record using this priority order:
-1. If any record has flight_status "active" (currently in the air), pick that one.
-2. Otherwise, pick the record with the single latest/most recent flight_date value.
-Ignore every other record.
+CLAIMANT'S NARRATIVE:
+{claim_narrative[:1000]}
+END OF NARRATIVE.
 
-RAW RESPONSE:
+OFFICIAL RECORD (raw JSON, may contain multiple dated records for this flight number — select the one with
+flight_status "active" if present, otherwise the single most recent flight_date, and ignore all other records):
 {snippet_input}
-END OF RAW RESPONSE.
+END OF OFFICIAL RECORD.
 
-Return ONLY this JSON, nothing else, describing ONLY the one record you selected:
-{{"flight_status": "<the flight_status value from that one record>", "departure_delay": <the departure.delay value from that one record, or null if absent>, "arrival_delay": <the arrival.delay value from that one record, or null if absent>, "looks_relevant": <true if any usable record was found, false if the response was empty or an error>}}"""
+Do two separate things:
+1. Extract the objective facts from the ONE selected official record only.
+2. Compare the claimant's narrative against those objective facts. Flag it as inconsistent ONLY for a material
+factual contradiction — e.g. the narrative describes a wildly different delay length than the record shows, claims
+the flight was cancelled when the record shows it landed close to on time, or otherwise conflicts with the record
+in a way that matters. Do NOT flag it as inconsistent merely for being vague, brief, or emotional — claimants are
+not expected to know technical details, only to describe their real experience honestly.
+
+Return ONLY this JSON, nothing else:
+{{"flight_status": "<flight_status from the selected record>", "departure_delay": <departure.delay from the selected record, or null>, "arrival_delay": <arrival.delay from the selected record, or null>, "looks_relevant": <true if a usable record was found, false otherwise>, "narrative_consistent": <true if the claimant's account does not materially contradict the official record, false if it does>, "consistency_reasoning": "<one sentence explaining the consistency judgment, citing specifics from both the narrative and the record>"}}"""
 
             result = gl.nondet.exec_prompt(relay_prompt)
             return result.replace("```json", "").replace("```", "")
 
         result_raw = gl.eq_principle.prompt_non_comparative(
             generate,
-            task="select exactly one flight record from a JSON API response using a fixed priority rule (active status first, else most recent date), ignoring all other records",
-            criteria="a JSON object with flight_status, departure_delay, arrival_delay, and looks_relevant fields for the single selected record only",
+            task="extract objective flight status facts from one selected record, and separately judge whether a claimant's narrative materially contradicts those facts",
+            criteria="a JSON object with flight_status, departure_delay, arrival_delay, looks_relevant, narrative_consistent, and consistency_reasoning fields",
         )
 
         try:
@@ -135,6 +158,11 @@ Return ONLY this JSON, nothing else, describing ONLY the one record you selected
         departure_delay = result_json.get("departure_delay")
         arrival_delay = result_json.get("arrival_delay")
 
+        narrative_consistent = result_json.get("narrative_consistent")
+        if narrative_consistent is None:
+            narrative_consistent = False
+        consistency_reasoning = result_json.get("consistency_reasoning") or "No consistency judgment was returned."
+
         if not looks_relevant:
             delay_minutes = -1
         else:
@@ -144,14 +172,22 @@ Return ONLY this JSON, nothing else, describing ONLY the one record you selected
             if delay_minutes is None:
                 delay_minutes = 0
 
+        policy["claim_narrative"] = claim_narrative
         policy["delay_minutes"] = delay_minutes
         policy["flight_status"] = flight_status
         policy["departure_delay_minutes"] = departure_delay
         policy["arrival_delay_minutes"] = arrival_delay
-        policy["reasoning"] = "Source: Aviationstack API. flight_status=" + str(flight_status)
-        policy["sources_used"] = ["aviationstack:flights"]
+        policy["narrative_consistent"] = narrative_consistent
+        policy["reasoning"] = consistency_reasoning
+        policy["sources_used"] = ["aviationstack:flights", "claimant:narrative"]
 
-        if delay_minutes >= 180:
+        if delay_minutes < 0:
+            policy["status"] = "unresolved"
+        elif delay_minutes < 180:
+            policy["status"] = "not_delayed"
+        elif not narrative_consistent:
+            policy["status"] = "flagged_inconsistent"
+        else:
             payout_amount = policy["payout_amount"]
             if self.balance >= payout_amount:
                 target = gl.get_contract_at(Address(policy["holder"]))
@@ -160,10 +196,6 @@ Return ONLY this JSON, nothing else, describing ONLY the one record you selected
                 policy["paid_out"] = payout_amount
             else:
                 policy["status"] = "delayed_unfunded"
-        elif delay_minutes < 0:
-            policy["status"] = "unresolved"
-        else:
-            policy["status"] = "not_delayed"
 
         self._write_policy(policy_id, policy)
 
