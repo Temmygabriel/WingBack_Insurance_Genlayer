@@ -93,10 +93,16 @@ class WingbackInsurance(gl.Contract):
         if policy["status"] != "active":
             return
 
+        # Authorization: only the policy holder can file a claim on their own policy.
+        caller = gl.message.sender_address.as_hex
+        if caller != policy["holder"]:
+            raise gl.vm.UserError("Only the policy holder can file a claim on this policy")
+
         if not claim_narrative.strip():
             raise gl.vm.UserError("A claim narrative is required — describe what happened in your own words")
 
         flight = policy["flight_number"]
+        insured_date = policy["departure_date"]
 
         api_key = self.aviationstack_key
         url = "https://api.aviationstack.com/v1/flights?access_key=" + api_key + "&flight_iata=" + flight
@@ -112,37 +118,41 @@ class WingbackInsurance(gl.Contract):
                 relay_prompt = "The API request failed. Respond with exactly this JSON: {\"flight_status\": \"unknown\", \"departure_delay\": null, \"arrival_delay\": null, \"looks_relevant\": false, \"narrative_consistent\": false, \"consistency_reasoning\": \"No official record could be retrieved to check the claim against.\"}"
             else:
                 snippet_input = body_text[:4000]
-                relay_prompt = f"""You are adjudicating a flight-delay insurance claim. There are two pieces of evidence below:
-an official flight-status record (objective, from an aviation data provider) and the claimant's own written
-account of what happened (subjective, could be honest, mistaken, or exaggerated).
+                relay_prompt = f"""You are adjudicating a flight-delay insurance claim. This policy insures flight
+{flight} SPECIFICALLY on departure date {insured_date} — not any other date this flight number has flown, since
+airlines reuse flight numbers daily.
 
 CLAIMANT'S NARRATIVE:
 {claim_narrative[:1000]}
 END OF NARRATIVE.
 
-OFFICIAL RECORD (raw JSON, may contain multiple dated records for this flight number — select the one with
-flight_status "active" if present, otherwise the single most recent flight_date, and ignore all other records):
+OFFICIAL RECORD (raw JSON, may contain multiple dated records for this flight number):
 {snippet_input}
 END OF OFFICIAL RECORD.
 
-Do two separate things:
-1. Extract the objective facts from the ONE selected official record only.
-2. Compare the claimant's narrative against those objective facts. Flag it as inconsistent ONLY for a material
-factual contradiction — e.g. the narrative describes a wildly different delay length than the record shows, claims
-the flight was cancelled when the record shows it landed close to on time, or otherwise conflicts with the record
-in a way that matters. Do NOT flag it as inconsistent merely for being vague, brief, or emotional — claimants are
-not expected to know technical details, only to describe their real experience honestly.
+Follow these steps in order:
+1. Find the ONE record whose flight_date field exactly equals "{insured_date}". Ignore every record with any
+other date, even if one looks more current or more complete. If no record matches this exact date, there is
+no usable data for the insured flight — set looks_relevant to false and do not substitute a different date.
+2. If a record matching "{insured_date}" exists, check its flight_status. Only proceed if the status indicates
+the flight has actually concluded (e.g. "landed", "cancelled", "diverted") — not "scheduled" or "active", since
+those mean the flight hasn't happened yet and there is nothing to adjudicate. If the matched record isn't
+concluded, set looks_relevant to false and say so in the reasoning.
+3. Only if you have a concluded record for the exact insured date: extract its objective delay facts, then
+compare the claimant's narrative against them. Flag inconsistent ONLY for a material factual contradiction —
+a wildly different delay length, or a claimed cancellation the record contradicts. Do not flag it for being
+vague or brief.
 
 Return ONLY this JSON, nothing else:
-{{"flight_status": "<flight_status from the selected record>", "departure_delay": <departure.delay from the selected record, or null>, "arrival_delay": <arrival.delay from the selected record, or null>, "looks_relevant": <true if a usable record was found, false otherwise>, "narrative_consistent": <true if the claimant's account does not materially contradict the official record, false if it does>, "consistency_reasoning": "<one sentence explaining the consistency judgment, citing specifics from both the narrative and the record>"}}"""
+{{"flight_status": "<flight_status from the matched record, or \\"unknown\\" if none matched>", "departure_delay": <departure.delay from the matched record, or null>, "arrival_delay": <arrival.delay from the matched record, or null>, "looks_relevant": <true only if a concluded record for the exact insured date was found>, "narrative_consistent": <true if the claimant's account does not materially contradict that record, false if it does>, "consistency_reasoning": "<one sentence explaining your judgment, citing the specific date/status/delay you checked>"}}"""
 
             result = gl.nondet.exec_prompt(relay_prompt)
             return result.replace("```json", "").replace("```", "")
 
         result_raw = gl.eq_principle.prompt_non_comparative(
             generate,
-            task="extract objective flight status facts from one selected record, and separately judge whether a claimant's narrative materially contradicts those facts",
-            criteria="a JSON object with flight_status, departure_delay, arrival_delay, looks_relevant, narrative_consistent, and consistency_reasoning fields",
+            task="find the one record matching a specific insured flight date, confirm the flight has concluded, then judge whether a claimant's narrative materially contradicts that record's delay facts",
+            criteria="a JSON object with flight_status, departure_delay, arrival_delay, looks_relevant, narrative_consistent, and consistency_reasoning fields, grounded only in the record matching the exact insured date",
         )
 
         try:
@@ -170,7 +180,12 @@ Return ONLY this JSON, nothing else:
             if delay_minutes is None:
                 delay_minutes = departure_delay
             if delay_minutes is None:
-                delay_minutes = 0
+                # A cancelled/diverted flight has no minutes figure to report,
+                # but it is unambiguously a qualifying event for this policy —
+                # defaulting it to 0 previously made it indistinguishable from
+                # "flew right on time", which is wrong. Treat it as a
+                # qualifying delay instead.
+                delay_minutes = 999 if flight_status in ("cancelled", "diverted") else 0
 
         policy["claim_narrative"] = claim_narrative
         policy["delay_minutes"] = delay_minutes
@@ -183,10 +198,16 @@ Return ONLY this JSON, nothing else:
 
         if delay_minutes < 0:
             policy["status"] = "unresolved"
+        elif not narrative_consistent:
+            # Checked before the delay threshold: a narrative that materially
+            # contradicts the official record should be flagged regardless of
+            # how long the actual delay was — previously this was only ever
+            # reached for delays >= 180 minutes, so a false claim paired with
+            # a short (or cancelled-defaulted) delay silently passed as
+            # not_delayed instead of being flagged.
+            policy["status"] = "flagged_inconsistent"
         elif delay_minutes < 180:
             policy["status"] = "not_delayed"
-        elif not narrative_consistent:
-            policy["status"] = "flagged_inconsistent"
         else:
             payout_amount = policy["payout_amount"]
             if self.balance >= payout_amount:
