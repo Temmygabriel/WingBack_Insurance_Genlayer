@@ -5,6 +5,11 @@ import { POLICY_STATUS, STATUS_LABEL, STATUS_PILL_CLASS } from "../types";
 import type { Policy } from "../types";
 import { AdjudicationProgress } from "./AdjudicationProgress";
 
+// Flight statuses where delay_minutes is a sentinel value (used to trigger
+// the payout threshold) rather than a real minutes figure — never render it
+// as "Nm delay" for these, since it's not one.
+const NON_DELAY_STATUSES = new Set(["cancelled", "diverted"]);
+
 export function PolicyCard({
   policy,
   onCheck,
@@ -16,6 +21,9 @@ export function PolicyCard({
 }) {
   const isActive = policy.status === POLICY_STATUS.ACTIVE;
   const [narrative, setNarrative] = useState("");
+
+  const showDelayMinutes =
+    policy.delay_minutes >= 0 && !NON_DELAY_STATUSES.has(policy.flight_status);
 
   return (
     <div className="flight-row">
@@ -37,7 +45,7 @@ export function PolicyCard({
         <>
           <p className="flight-row__reasoning">
             {policy.flight_status && <span className="mono">{policy.flight_status} · </span>}
-            {policy.delay_minutes >= 0 ? `${policy.delay_minutes}m delay. ` : ""}
+            {showDelayMinutes ? `${policy.delay_minutes}m delay. ` : ""}
             {policy.reasoning}
           </p>
           {policy.claim_narrative && (
