@@ -3,23 +3,36 @@ import { useState } from "react";
 import { fromRawUnits } from "../lib/contract";
 import { POLICY_STATUS } from "../types";
 import type { Policy } from "../types";
+import { isMetaMaskAvailable } from "../lib/wallet";
 
 export function AccountView({
   address,
   privateKey,
+  accountMode,
+  walletError,
+  connectingWallet,
   policies,
   onImport,
+  onConnectWallet,
+  onDisconnectWallet,
 }: {
   address: string;
   privateKey: string;
+  accountMode: "burner" | "wallet";
+  walletError: string;
+  connectingWallet: boolean;
   policies: Policy[];
   onImport: (key: string) => void;
+  onConnectWallet: () => void;
+  onDisconnectWallet: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [keyRevealed, setKeyRevealed] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
   const [importValue, setImportValue] = useState("");
   const [importError, setImportError] = useState("");
+
+  const isWallet = accountMode === "wallet";
 
   function handleCopy() {
     navigator.clipboard.writeText(address);
@@ -50,7 +63,9 @@ export function AccountView({
   return (
     <div>
       <div className="account-hero">
-        <p className="card-label" style={{ marginBottom: 10 }}>This browser's wallet</p>
+        <p className="card-label" style={{ marginBottom: 10 }}>
+          {isWallet ? "Connected wallet" : "This browser's wallet"}
+        </p>
 
         <div className="account-address">
           <span style={{ flex: 1 }}>{address || "Setting up…"}</span>
@@ -60,8 +75,9 @@ export function AccountView({
         </div>
 
         <p className="hint" style={{ marginTop: 12, lineHeight: 1.6 }}>
-          Generated automatically the first time you visited, stored only on this device. On studionet
-          no funding step is needed — it's ready to use immediately.
+          {isWallet
+            ? "This account is signed through your connected wallet — every transaction will prompt approval there."
+            : "Generated automatically the first time you visited, stored only on this device. On studionet no funding step is needed — it's ready to use immediately."}
         </p>
 
         <div className="account-stats">
@@ -80,58 +96,112 @@ export function AccountView({
         </div>
       </div>
 
+      {/* ── Wallet connect / disconnect ── */}
       <div className="card" style={{ marginTop: 20 }}>
         <div className="card-header">
-          <span className="card-label">Use this account on another device</span>
+          <span className="card-label">
+            {isWallet ? "Wallet connection" : "Use your own wallet"}
+          </span>
         </div>
         <div className="card-body">
-          <p className="hint" style={{ marginBottom: 12, lineHeight: 1.6 }}>
-            This wallet only exists in this browser. To see the same flights somewhere else — another
-            browser, another device, or after clearing site data — export the private key below and
-            import it there.
-          </p>
-          <p className="banner banner-info" style={{ marginBottom: 12 }}>
-            Anyone with this key can act as this account. On studionet that's low-stakes, since GEN
-            here has no real value — but treat it like a real secret regardless.
-          </p>
-          {!keyRevealed && (
-            <button className="btn btn-secondary btn-sm" onClick={() => setKeyRevealed(true)}>
-              Reveal private key
-            </button>
-          )}
-          {keyRevealed && (
-            <div className="account-address">
-              <span className="mono" style={{ flex: 1, wordBreak: "break-all" }}>{privateKey}</span>
-              <button className="icon-btn" onClick={handleCopyKey}>
-                {keyCopied ? "Copied" : "Copy"}
+          {isWallet ? (
+            <>
+              <p className="hint" style={{ marginBottom: 12, lineHeight: 1.6 }}>
+                You're signing with a connected browser wallet instead of this browser's
+                auto-generated account.
+              </p>
+              <button className="btn btn-secondary btn-sm" onClick={onDisconnectWallet}>
+                Disconnect &amp; use browser account
               </button>
-            </div>
+            </>
+          ) : (
+            <>
+              <p className="hint" style={{ marginBottom: 12, lineHeight: 1.6 }}>
+                Connect MetaMask (or a compatible wallet) to sign transactions from your own
+                address instead of this browser's auto-generated one. This will add or switch
+                to the GenLayer Studio Network in your wallet if needed.
+              </p>
+              {!isMetaMaskAvailable() && (
+                <p className="banner banner-info" style={{ marginBottom: 12 }}>
+                  No wallet was detected in this browser. Install MetaMask (or a compatible
+                  wallet extension) to use this option — the auto-generated account above works
+                  fine without it.
+                </p>
+              )}
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={onConnectWallet}
+                disabled={connectingWallet || !isMetaMaskAvailable()}
+              >
+                {connectingWallet && <span className="spinner" style={{ width: 14, height: 14 }} />}
+                {connectingWallet ? "Connecting…" : "Connect Wallet"}
+              </button>
+              {walletError && (
+                <p className="hint" style={{ color: "var(--red-2)", marginTop: 8 }}>{walletError}</p>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 20 }}>
-        <div className="card-header">
-          <span className="card-label">Import an account</span>
+      {/* ── Private key reveal — only meaningful for the local burner account ── */}
+      {!isWallet && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <div className="card-header">
+            <span className="card-label">Use this account on another device</span>
+          </div>
+          <div className="card-body">
+            <p className="hint" style={{ marginBottom: 12, lineHeight: 1.6 }}>
+              This wallet only exists in this browser. To see the same flights somewhere else — another
+              browser, another device, or after clearing site data — export the private key below and
+              import it there.
+            </p>
+            <p className="banner banner-info" style={{ marginBottom: 12 }}>
+              Anyone with this key can act as this account. On studionet that's low-stakes, since GEN
+              here has no real value — but treat it like a real secret regardless.
+            </p>
+            {!keyRevealed && (
+              <button className="btn btn-secondary btn-sm" onClick={() => setKeyRevealed(true)}>
+                Reveal private key
+              </button>
+            )}
+            {keyRevealed && (
+              <div className="account-address">
+                <span className="mono" style={{ flex: 1, wordBreak: "break-all" }}>{privateKey}</span>
+                <button className="icon-btn" onClick={handleCopyKey}>
+                  {keyCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="card-body">
-          <p className="hint" style={{ marginBottom: 12, lineHeight: 1.6 }}>
-            Paste a private key exported from another browser to switch this browser to that account.
-            This replaces the account currently in use here.
-          </p>
-          <form onSubmit={handleImportSubmit} style={{ display: "flex", gap: 8 }}>
-            <input
-              className="input mono"
-              placeholder="0x…"
-              value={importValue}
-              onChange={(e) => setImportValue(e.target.value)}
-              style={{ flex: 1 }}
-            />
-            <button className="btn btn-dark btn-sm" type="submit">Import</button>
-          </form>
-          {importError && <p className="hint" style={{ color: "var(--red-2)", marginTop: 8 }}>{importError}</p>}
+      )}
+
+      {/* ── Import account — only meaningful for the local burner account ── */}
+      {!isWallet && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <div className="card-header">
+            <span className="card-label">Import an account</span>
+          </div>
+          <div className="card-body">
+            <p className="hint" style={{ marginBottom: 12, lineHeight: 1.6 }}>
+              Paste a private key exported from another browser to switch this browser to that account.
+              This replaces the account currently in use here.
+            </p>
+            <form onSubmit={handleImportSubmit} style={{ display: "flex", gap: 8 }}>
+              <input
+                className="input mono"
+                placeholder="0x…"
+                value={importValue}
+                onChange={(e) => setImportValue(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button className="btn btn-dark btn-sm" type="submit">Import</button>
+            </form>
+            {importError && <p className="hint" style={{ color: "var(--red-2)", marginTop: 8 }}>{importError}</p>}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
