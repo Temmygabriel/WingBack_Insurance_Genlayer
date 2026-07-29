@@ -16,6 +16,7 @@ import { PolicyCard } from "../components/PolicyCard";
 import { AccountView } from "../components/AccountView";
 import { HowItWorks } from "../components/HowItWorks";
 import { Logo } from "../components/Logo";
+import { WalletIcon } from "../components/WalletIcon";
 
 const POLL_INTERVAL = 8000;
 type Tab = "register" | "policies" | "account";
@@ -233,10 +234,35 @@ export default function App() {
             My Flights{policies.length > 0 ? ` (${policies.length})` : ""}
           </button>
         </nav>
-        <button className="app-topbar__account" onClick={() => setTab("account")}>
-          {shortAddress(address) || "Setting up…"}
-          {accountMode === "wallet" ? " · Wallet" : ""}
-        </button>
+        <div className="app-topbar__actions">
+          {accountMode === "burner" && (
+            <button
+              className="app-topbar__connect-btn"
+              onClick={handleConnectWallet}
+              disabled={connectingWallet}
+              title="Connect a browser wallet like MetaMask"
+            >
+              {connectingWallet ? (
+                <span className="spinner" style={{ width: 13, height: 13 }} />
+              ) : (
+                <WalletIcon size={15} />
+              )}
+              {connectingWallet ? "Connecting…" : "Connect Wallet"}
+            </button>
+          )}
+          <button
+            className="app-topbar__account"
+            onClick={() => setTab("account")}
+            title={accountMode === "wallet" ? "Connected wallet — view account" : "Guest account — view account & connect a wallet"}
+          >
+            <span className={`app-topbar__account-dot app-topbar__account-dot--${accountMode}`} />
+            <WalletIcon size={14} />
+            <span>{shortAddress(address) || "Setting up…"}</span>
+            <span className="app-topbar__account-tag">
+              {accountMode === "wallet" ? "Wallet" : "Guest"}
+            </span>
+          </button>
+        </div>
       </div>
 
       {toast && <div className="toast">{toast}</div>}
