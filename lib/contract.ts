@@ -6,9 +6,13 @@ import type { Policy } from "../types";
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`;
 const MAX_ATTEMPTS = 3;
 
+// A signing account is either:
+//   - a local burner Account object (private key held in this browser), or
+//   - a plain wallet address string, in which case genlayer-js relies on
+//     the injected browser wallet (MetaMask) to sign — see lib/wallet.ts.
+export type SigningAccount = ReturnType<typeof createAccount> | `0x${string}`;
+
 // --- Unit conversion: GEN uses 18 decimals, like wei. -----------------------
-// Contract amounts are always raw on-chain integers. The UI only ever
-// shows/accepts human GEN amounts, converted at this one boundary.
 
 export function toRawUnits(genAmount: string): bigint {
   const [wholeRaw, fracRaw = ""] = genAmount.trim().split(".");
@@ -25,10 +29,14 @@ export function fromRawUnits(raw: number | string): string {
   return fracStr ? `${whole}.${fracStr}` : `${whole}`;
 }
 
-// --- Core client + account plumbing — do not change ------------------------
+function addressOf(account: SigningAccount): string {
+  return typeof account === "string" ? account : account.address;
+}
 
-function makeClient(account: ReturnType<typeof createAccount>) {
-  return createClient({ chain: studionet, account });
+// --- Core client + account plumbing -----------------------------------------
+
+function makeClient(account: SigningAccount) {
+  return createClient({ chain: studionet, account: account as any });
 }
 
 export function makeAccount(privateKey?: `0x${string}`) {
@@ -36,7 +44,7 @@ export function makeAccount(privateKey?: `0x${string}`) {
 }
 
 export async function writeContract(
-  account: ReturnType<typeof createAccount>,
+  account: SigningAccount,
   method: string,
   args: unknown[],
   value?: bigint
@@ -48,7 +56,7 @@ export async function writeContract(
         address: CONTRACT_ADDRESS,
         functionName: method,
         args,
-        account,
+        account: account as any,
         leaderOnly: false,
       };
       if (value !== undefined) callParams.value = value.toString();
@@ -73,7 +81,7 @@ export async function writeContract(
 
 // Use this ONLY for contract methods that return a value (buy_policy returns policy_id)
 export async function writeContractWithReturn(
-  account: ReturnType<typeof createAccount>,
+  account: SigningAccount,
   method: string,
   args: unknown[],
   value?: bigint
@@ -95,7 +103,7 @@ export async function writeContractWithReturn(
         address: CONTRACT_ADDRESS,
         functionName: method,
         args,
-        account,
+        account: account as any,
         leaderOnly: false,
       };
       if (value !== undefined) callParams.value = value.toString();
@@ -147,7 +155,7 @@ export async function readContract(method: string, args: unknown[]): Promise<str
 // --- Wingback-specific wrappers ---------------------------------------------
 
 export async function buyPolicy(
-  account: ReturnType<typeof createAccount>,
+  account: SigningAccount,
   flightNumber: string,
   departureDate: string,
   departureTs: number,
@@ -167,8 +175,15 @@ export async function buyPolicy(
   );
 }
 
+export async function depositReserve(
+  account: SigningAccount,
+  amountGen: string
+): Promise<void> {
+  return writeContract(account, "deposit_reserve", [], toRawUnits(amountGen));
+}
+
 export async function adjudicateFlight(
-  account: ReturnType<typeof createAccount>,
+  account: SigningAccount,
   policyId: string,
   claimNarrative: string
 ): Promise<void> {
@@ -192,3 +207,13 @@ export async function getContractBalance(): Promise<string> {
 export async function getPolicyCount(): Promise<string> {
   return readContract("get_policy_count", []);
 }
+
+export async function getTotalOutstandingExposure(): Promise<string> {
+  return readContract("get_total_outstanding_exposure", []);
+}
+
+export async function getReserveDepositedTotal(): Promise<string> {
+  return readContract("get_reserve_deposited_total", []);
+}
+
+export { addressOf };
