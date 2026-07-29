@@ -5,7 +5,10 @@ import {
   buyPolicy,
   adjudicateFlight,
   getPoliciesForHolder,
+  addressOf,
 } from "../lib/contract";
+import type { SigningAccount } from "../lib/contract";
+import { connectMetaMaskWallet } from "../lib/wallet";
 import type { Policy } from "../types";
 import { POLICY_STATUS } from "../types";
 import { BuyForm } from "../components/BuyForm";
@@ -17,6 +20,7 @@ import { Logo } from "../components/Logo";
 const POLL_INTERVAL = 8000;
 type Tab = "register" | "policies" | "account";
 type FlightFilter = "active" | "resolved";
+type AccountMode = "burner" | "wallet";
 
 function shortAddress(addr: string) {
   if (!addr) return "";
@@ -24,7 +28,8 @@ function shortAddress(addr: string) {
 }
 
 export default function App() {
-  const accountRef = useRef<ReturnType<typeof makeAccount> | null>(null);
+  const accountRef = useRef<SigningAccount | null>(null);
+  const burnerAccountRef = useRef<ReturnType<typeof makeAccount> | null>(null);
   const addressRef = useRef<string>("");
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const adjudicatingRef = useRef<Set<string>>(new Set());
@@ -32,8 +37,11 @@ export default function App() {
 
   const [tab, setTab] = useState<Tab>("register");
   const [flightFilter, setFlightFilter] = useState<FlightFilter>("active");
+  const [accountMode, setAccountMode] = useState<AccountMode>("burner");
   const [address, setAddress] = useState<string>("");
-  const [privateKey, setPrivateKey] = useState<string>("");
+  const [privateKey, setPrivateKey] = useState<string>(""); // only meaningful in burner mode
+  const [walletError, setWalletError] = useState<string>("");
+  const [connectingWallet, setConnectingWallet] = useState(false);
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [loadingPolicies, setLoadingPolicies] = useState(true);
   const [buying, setBuying] = useState(false);
@@ -51,7 +59,7 @@ export default function App() {
     toastTimerRef.current = setTimeout(() => setToast(""), 5000);
   }
 
-  function loadAccount(forcedKey?: `0x${string}`) {
+  function loadBurnerAccount(forcedKey?: `0x${string}`) {
     let acc: ReturnType<typeof makeAccount>;
     const savedKey = forcedKey || (localStorage.getItem("wingback_private_key") as `0x${string}` | null);
 
@@ -67,8 +75,10 @@ export default function App() {
 
     localStorage.setItem("wingback_private_key", acc.privateKey);
     localStorage.setItem("wingback_address", acc.address);
+    burnerAccountRef.current = acc;
     accountRef.current = acc;
     addressRef.current = acc.address;
+    setAccountMode("burner");
     setAddress(acc.address);
     setPrivateKey(acc.privateKey);
     setLoadingPolicies(true);
@@ -77,14 +87,50 @@ export default function App() {
   }
 
   function handleImportAccount(key: string) {
-    loadAccount(key as `0x${string}`);
+    loadBurnerAccount(key as `0x${string}`);
     setTab("policies");
     setFlightFilter("active");
     showToast("Account imported. Loading its flights…");
   }
 
+  async function handleConnectWallet() {
+    setWalletError("");
+    setConnectingWallet(true);
+    try {
+      const walletAddress = await connectMetaMaskWallet();
+      accountRef.current = walletAddress as `0x${string}`;
+      addressRef.current = walletAddress;
+      setAccountMode("wallet");
+      setAddress(walletAddress);
+      setPrivateKey(""); // no private key to show for a wallet-signed account
+      setLoadingPolicies(true);
+      setPolicies([]);
+      showToast("Wallet connected. Loading its flights…");
+    } catch (err: any) {
+      setWalletError(err?.message || "Could not connect the wallet. Please try again.");
+    } finally {
+      setConnectingWallet(false);
+    }
+  }
+
+  function handleDisconnectWallet() {
+    // Falls back to the existing browser-generated burner account.
+    if (burnerAccountRef.current) {
+      accountRef.current = burnerAccountRef.current;
+      addressRef.current = burnerAccountRef.current.address;
+      setAccountMode("burner");
+      setAddress(burnerAccountRef.current.address);
+      setPrivateKey(burnerAccountRef.current.privateKey);
+    } else {
+      loadBurnerAccount();
+    }
+    setLoadingPolicies(true);
+    setPolicies([]);
+    showToast("Disconnected. Back to this browser's local account.");
+  }
+
   useEffect(() => {
-    loadAccount();
+    loadBurnerAccount();
   }, []);
 
   async function refreshPolicies() {
@@ -165,7 +211,10 @@ export default function App() {
     },
     account: {
       title: "Account",
-      sub: "Your studionet wallet, generated locally in this browser.",
+      sub:
+        accountMode === "wallet"
+          ? "Connected via your browser wallet."
+          : "Your studionet wallet, generated locally in this browser.",
     },
   };
 
@@ -186,6 +235,7 @@ export default function App() {
         </nav>
         <button className="app-topbar__account" onClick={() => setTab("account")}>
           {shortAddress(address) || "Setting up…"}
+          {accountMode === "wallet" ? " · Wallet" : ""}
         </button>
       </div>
 
@@ -258,7 +308,17 @@ export default function App() {
       )}
 
       {tab === "account" && (
-        <AccountView address={address} privateKey={privateKey} policies={policies} onImport={handleImportAccount} />
+        <AccountView
+          address={address}
+          privateKey={privateKey}
+          accountMode={accountMode}
+          walletError={walletError}
+          connectingWallet={connectingWallet}
+          policies={policies}
+          onImport={handleImportAccount}
+          onConnectWallet={handleConnectWallet}
+          onDisconnectWallet={handleDisconnectWallet}
+        />
       )}
     </div>
   );
