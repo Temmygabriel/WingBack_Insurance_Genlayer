@@ -14,10 +14,14 @@ class WingbackInsurance(gl.Contract):
     policies: TreeMap[str, str]
     holder_policies: TreeMap[str, str]
     aviationstack_key: str
+    total_outstanding_exposure: u256  # sum of payout_amount across all currently-active policies
+    reserve_deposited_total: u256     # sum of voluntary deposit_reserve top-ups (transparency only)
 
     def __init__(self):
         self.policy_count = u256(0)
         self.aviationstack_key = "d3e89e21d8629497a38527e7d90dc237"
+        self.total_outstanding_exposure = u256(0)
+        self.reserve_deposited_total = u256(0)
 
     @gl.public.write
     def set_aviationstack_key(self, new_key: str) -> None:
@@ -53,12 +57,45 @@ class WingbackInsurance(gl.Contract):
         return code
 
     @gl.public.write.payable
+    def deposit_reserve(self) -> None:
+        # Real capital top-up, independent of buying a policy. Anyone —
+        # an operator, a backer, the community — can add GEN to the pool
+        # to grow its capacity to cover future payouts. This is what
+        # actually backs the guarantee enforced in buy_policy below: the
+        # runtime credits gl.message.value to self.balance automatically
+        # for any payable call, so no manual bookkeeping of the balance
+        # itself is needed here — we only track the running total for
+        # transparency on the dashboard.
+        amt = gl.message.value
+        if amt <= 0:
+            raise gl.vm.UserError("Deposit must be greater than zero")
+        self.reserve_deposited_total = u256(int(self.reserve_deposited_total) + amt)
+
+    @gl.public.write.payable
     def buy_policy(self, flight_number: str, departure_date: str, departure_ts: str) -> str:
         holder = gl.message.sender_address.as_hex
         premium = gl.message.value
 
         if premium <= 0:
             raise gl.vm.UserError("Premium must be greater than zero")
+
+        payout_amount = premium * PAYOUT_MULTIPLIER
+
+        # Full-collateralization guarantee: never sell a policy unless the
+        # contract already holds enough GEN — right now, including this
+        # premium, which the runtime has already credited to self.balance —
+        # to cover every payout obligation that could come due, including
+        # this new one. This is the actual answer to "what guarantees the
+        # payout of funds?": the contract mathematically cannot oversell its
+        # own reserve.
+        required_balance = int(self.total_outstanding_exposure) + payout_amount
+        if self.balance < required_balance:
+            raise gl.vm.UserError(
+                "This policy's potential payout would exceed the contract's available reserve. "
+                f"Current reserve: {self.balance}, already-committed exposure: {int(self.total_outstanding_exposure)}, "
+                f"this policy would require: {required_balance} total. Try a smaller premium, or ask the "
+                "community/operator to top up the reserve via deposit_reserve first."
+            )
 
         self.policy_count = u256(int(self.policy_count) + 1)
         policy_id = self._make_policy_id(holder, flight_number, departure_date)
@@ -70,7 +107,7 @@ class WingbackInsurance(gl.Contract):
             "departure_date": departure_date,
             "departure_ts": int(departure_ts),
             "premium": premium,
-            "payout_amount": premium * PAYOUT_MULTIPLIER,
+            "payout_amount": payout_amount,
             "status": "active",
             "delay_minutes": 0,
             "flight_status": "",
@@ -84,6 +121,9 @@ class WingbackInsurance(gl.Contract):
         }
         self._write_policy(policy_id, policy_data)
         self._add_holder_policy(holder, policy_id)
+
+        self.total_outstanding_exposure = u256(int(self.total_outstanding_exposure) + payout_amount)
+
         return policy_id
 
     @gl.public.write
@@ -216,7 +256,17 @@ Return ONLY this JSON, nothing else:
                 policy["status"] = "paid"
                 policy["paid_out"] = payout_amount
             else:
+                # Should no longer be reachable under the full-collateralization
+                # guarantee in buy_policy — kept as a defensive fallback only.
                 policy["status"] = "delayed_unfunded"
+
+        # This policy is now resolved to a terminal status one way or another
+        # (every branch above reaches here) — release its reserved exposure
+        # regardless of outcome, so the reserve capacity freed up is
+        # available for future policies.
+        self.total_outstanding_exposure = u256(
+            max(0, int(self.total_outstanding_exposure) - policy["payout_amount"])
+        )
 
         self._write_policy(policy_id, policy)
 
@@ -236,3 +286,11 @@ Return ONLY this JSON, nothing else:
     @gl.public.view
     def get_policy_count(self) -> str:
         return str(int(self.policy_count))
+
+    @gl.public.view
+    def get_total_outstanding_exposure(self) -> str:
+        return str(int(self.total_outstanding_exposure))
+
+    @gl.public.view
+    def get_reserve_deposited_total(self) -> str:
+        return str(int(self.reserve_deposited_total))
