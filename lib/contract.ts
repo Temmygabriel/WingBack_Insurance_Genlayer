@@ -33,6 +33,22 @@ function addressOf(account: SigningAccount): string {
   return typeof account === "string" ? account : account.address;
 }
 
+// GenLayer's SDK expects the per-call `account` passed into writeContract /
+// simulateWriteContract to be an object with an `.address` field — passing
+// a plain wallet address string there breaks internally (`account.address`
+// is undefined on a string), even though the CLIENT-level account must stay
+// a plain string for eth_ RPC calls to route to the injected wallet
+// (MetaMask) instead of the plain HTTP endpoint. This normalizes only the
+// per-call value; makeClient() below keeps passing the raw value through.
+function toCallAccount(account: SigningAccount): any {
+  if (typeof account === "string") {
+    return { address: account }; // no `type` field — keeps _sendTransaction's
+    // `type === "local"` check false, so it takes the eth_sendTransaction
+    // (wallet-signed) path rather than expecting a local signTransaction.
+  }
+  return account;
+}
+
 // --- Core client + account plumbing -----------------------------------------
 
 function makeClient(account: SigningAccount) {
@@ -48,7 +64,7 @@ export async function writeContract(
   method: string,
   args: unknown[],
   value?: bigint
-): Promise<void> {
+): Promise<string> {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const client = makeClient(account);
@@ -56,7 +72,7 @@ export async function writeContract(
         address: CONTRACT_ADDRESS,
         functionName: method,
         args,
-        account: account as any,
+        account: toCallAccount(account),
         leaderOnly: false,
       };
       if (value !== undefined) callParams.value = value.toString();
@@ -68,7 +84,7 @@ export async function writeContract(
         retries: 120,
         interval: 4000,
       });
-      return;
+      return hash;
     } catch (err: any) {
       if (attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, attempt * 3000));
@@ -93,6 +109,7 @@ export async function writeContractWithReturn(
         address: CONTRACT_ADDRESS,
         functionName: method,
         args,
+        account: toCallAccount(account),
       };
       if (value !== undefined) simParams.value = value.toString();
 
@@ -103,7 +120,7 @@ export async function writeContractWithReturn(
         address: CONTRACT_ADDRESS,
         functionName: method,
         args,
-        account: account as any,
+        account: toCallAccount(account),
         leaderOnly: false,
       };
       if (value !== undefined) callParams.value = value.toString();
@@ -160,7 +177,7 @@ export async function buyPolicy(
   departureDate: string,
   departureTs: number,
   premiumGen: string
-): Promise<void> {
+): Promise<string> {
   // NOTE: deliberately using writeContract, not writeContractWithReturn.
   // simulateWriteContract does not honor the `value` field, so simulating
   // this call sees a zero premium and buy_policy's own zero-premium check
@@ -178,7 +195,7 @@ export async function buyPolicy(
 export async function depositReserve(
   account: SigningAccount,
   amountGen: string
-): Promise<void> {
+): Promise<string> {
   return writeContract(account, "deposit_reserve", [], toRawUnits(amountGen));
 }
 
@@ -186,7 +203,7 @@ export async function adjudicateFlight(
   account: SigningAccount,
   policyId: string,
   claimNarrative: string
-): Promise<void> {
+): Promise<string> {
   return writeContract(account, "adjudicate_flight", [policyId, claimNarrative]);
 }
 
@@ -210,6 +227,16 @@ export async function getPolicyCount(): Promise<string> {
 
 export async function getTotalOutstandingExposure(): Promise<string> {
   return readContract("get_total_outstanding_exposure", []);
+}
+
+const STUDIONET_EXPLORER_BASE = "https://explorer-studio.genlayer.com";
+
+export function explorerTxUrl(hash: string): string {
+  return `${STUDIONET_EXPLORER_BASE}/tx/${hash}`;
+}
+
+export function explorerAddressUrl(address: string): string {
+  return `${STUDIONET_EXPLORER_BASE}/address/${address}`;
 }
 
 export async function getReserveDepositedTotal(): Promise<string> {
