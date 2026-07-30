@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { fromRawUnits } from "../lib/contract";
+import { fromRawUnits, explorerTxUrl } from "../lib/contract";
 import { POLICY_STATUS, STATUS_LABEL, STATUS_PILL_CLASS } from "../types";
 import type { Policy } from "../types";
 import { AdjudicationProgress } from "./AdjudicationProgress";
@@ -20,10 +20,19 @@ export function PolicyCard({
   checking: boolean;
 }) {
   const isActive = policy.status === POLICY_STATUS.ACTIVE;
+  const isPaid = policy.status === POLICY_STATUS.PAID;
   const [narrative, setNarrative] = useState("");
 
   const showDelayMinutes =
     policy.delay_minutes >= 0 && !NON_DELAY_STATUSES.has(policy.flight_status);
+
+  // This component only ever renders client-side (page.tsx loads App with
+  // ssr: false), so reading localStorage directly here is safe — no
+  // server/client hydration mismatch risk.
+  const payoutTxHash =
+    isPaid && typeof window !== "undefined"
+      ? localStorage.getItem(`wingback_payout_tx:${policy.policy_id}`)
+      : null;
 
   return (
     <div className="flight-row">
@@ -40,6 +49,25 @@ export function PolicyCard({
       <div className="flight-row__amounts mono">
         {fromRawUnits(policy.premium)} GEN premium → {fromRawUnits(policy.payout_amount)} GEN payout
       </div>
+
+      {isPaid && (
+        <div className="banner banner-success" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <span>
+            ✓ You were paid <strong>{fromRawUnits(policy.paid_out)} GEN</strong>
+          </span>
+          {payoutTxHash && (
+            <a
+              href={explorerTxUrl(payoutTxHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mono"
+              style={{ fontSize: 12, textDecoration: "underline" }}
+            >
+              View transaction →
+            </a>
+          )}
+        </div>
+      )}
 
       {!isActive && (
         <>
