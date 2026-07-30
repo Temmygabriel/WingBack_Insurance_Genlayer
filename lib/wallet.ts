@@ -17,7 +17,7 @@
 export const STUDIONET_CHAIN_ID_DECIMAL = 61999;
 export const STUDIONET_CHAIN_ID_HEX = "0xf22f"; // 61999 in hex, confirmed by conversion
 export const STUDIONET_RPC_URL = "https://studio.genlayer.com/api";
-export const STUDIONET_EXPLORER_URL = "https://genlayer-explorer.vercel.app";
+export const STUDIONET_EXPLORER_URL = "https://explorer-studio.genlayer.com"; // confirmed live — the URL embedded in genlayer-js's package source (genlayer-explorer.vercel.app) is stale
 
 export function isMetaMaskAvailable(): boolean {
   return typeof window !== "undefined" && !!(window as any).ethereum;
