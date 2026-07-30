@@ -185,7 +185,8 @@ export default function App() {
     setAdjudicatingIds(new Set(adjudicatingRef.current));
     setError("");
     try {
-      await adjudicateFlight(accountRef.current, policyId, narrative);
+      const hash = await adjudicateFlight(accountRef.current, policyId, narrative);
+      localStorage.setItem(`wingback_payout_tx:${policyId}`, hash);
       await refreshPolicies();
       setFlightFilter("resolved");
       showToast("Claim reconciled. See the verdict below.");
