@@ -38,6 +38,12 @@ export interface Policy {
   departure_date: string;
   departure_ts: number;
   premium: number;
+  // Worst-case payout reserved at purchase (premium * MAX_MULTIPLIER, currently 8x).
+  // This is what's actually collateralized — always known, even before resolution.
+  reserved_payout_amount: number;
+  // Actual tier-based payout (3x/5x/8x depending on delay severity). Starts
+  // at 0 and is only set once the policy resolves to "paid" — do not treat
+  // 0 here as "no coverage," check reserved_payout_amount for the ceiling.
   payout_amount: number;
   status: PolicyStatus;
   delay_minutes: number;
