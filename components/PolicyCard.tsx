@@ -6,7 +6,7 @@ import type { Policy } from "../types";
 import { AdjudicationProgress } from "./AdjudicationProgress";
 
 // Flight statuses where delay_minutes is a sentinel value (used to trigger
-// the payout threshold) rather than a real minutes figure — never render it
+// the top payout tier) rather than a real minutes figure — never render it
 // as "Nm delay" for these, since it's not one.
 const NON_DELAY_STATUSES = new Set(["cancelled", "diverted"]);
 
@@ -26,9 +26,6 @@ export function PolicyCard({
   const showDelayMinutes =
     policy.delay_minutes >= 0 && !NON_DELAY_STATUSES.has(policy.flight_status);
 
-  // This component only ever renders client-side (page.tsx loads App with
-  // ssr: false), so reading localStorage directly here is safe — no
-  // server/client hydration mismatch risk.
   const payoutTxHash =
     isPaid && typeof window !== "undefined"
       ? localStorage.getItem(`wingback_payout_tx:${policy.policy_id}`)
@@ -47,7 +44,16 @@ export function PolicyCard({
       </div>
 
       <div className="flight-row__amounts mono">
-        {fromRawUnits(policy.premium)} GEN premium → {fromRawUnits(policy.payout_amount)} GEN payout
+        {isPaid ? (
+          <>
+            {fromRawUnits(policy.premium)} GEN premium → {fromRawUnits(policy.payout_amount)} GEN paid
+          </>
+        ) : (
+          <>
+            {fromRawUnits(policy.premium)} GEN premium → up to {fromRawUnits(policy.reserved_payout_amount)} GEN
+            {" "}(scales with delay severity)
+          </>
+        )}
       </div>
 
       {isPaid && (
