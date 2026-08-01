@@ -5,7 +5,25 @@ from genlayer import *
 import json
 
 
-PAYOUT_MULTIPLIER = 5  # payout = premium * PAYOUT_MULTIPLIER, only paid if delayed 3+ hours
+# Graduated payout by delay severity — real parametric flight-delay products
+# pay more for longer delays, not a single flat multiplier regardless of how
+# bad the delay actually was. MAX_MULTIPLIER is the worst case (cancelled/
+# diverted/very long delay) and is what gets reserved against a policy's
+# exposure at purchase time, since the real eventual tier isn't known until
+# adjudication — same principle real insurers use: reserve for the worst
+# case, release the difference once the actual claim size is known.
+MAX_MULTIPLIER = 8
+
+
+def _payout_multiplier(delay_minutes: int) -> int:
+    if delay_minutes < 180:
+        return 0
+    elif delay_minutes < 360:
+        return 3
+    elif delay_minutes < 720:
+        return 5
+    else:
+        return MAX_MULTIPLIER
 
 
 class WingbackInsurance(gl.Contract):
@@ -14,7 +32,7 @@ class WingbackInsurance(gl.Contract):
     policies: TreeMap[str, str]
     holder_policies: TreeMap[str, str]
     aviationstack_key: str
-    total_outstanding_exposure: u256  # sum of payout_amount across all currently-active policies
+    total_outstanding_exposure: u256  # sum of reserved_payout_amount across all currently-active policies
     reserve_deposited_total: u256     # sum of voluntary deposit_reserve top-ups (transparency only)
 
     def __init__(self):
@@ -58,14 +76,6 @@ class WingbackInsurance(gl.Contract):
 
     @gl.public.write.payable
     def deposit_reserve(self) -> None:
-        # Real capital top-up, independent of buying a policy. Anyone —
-        # an operator, a backer, the community — can add GEN to the pool
-        # to grow its capacity to cover future payouts. This is what
-        # actually backs the guarantee enforced in buy_policy below: the
-        # runtime credits gl.message.value to self.balance automatically
-        # for any payable call, so no manual bookkeeping of the balance
-        # itself is needed here — we only track the running total for
-        # transparency on the dashboard.
         amt = gl.message.value
         if amt <= 0:
             raise gl.vm.UserError("Deposit must be greater than zero")
@@ -79,19 +89,15 @@ class WingbackInsurance(gl.Contract):
         if premium <= 0:
             raise gl.vm.UserError("Premium must be greater than zero")
 
-        payout_amount = premium * PAYOUT_MULTIPLIER
+        # Reserve against the worst-case tier, not the actual eventual payout
+        # (which isn't known until adjudication) — same full-collateralization
+        # guarantee as before, sized to the real maximum this policy could owe.
+        reserved_payout_amount = premium * MAX_MULTIPLIER
 
-        # Full-collateralization guarantee: never sell a policy unless the
-        # contract already holds enough GEN — right now, including this
-        # premium, which the runtime has already credited to self.balance —
-        # to cover every payout obligation that could come due, including
-        # this new one. This is the actual answer to "what guarantees the
-        # payout of funds?": the contract mathematically cannot oversell its
-        # own reserve.
-        required_balance = int(self.total_outstanding_exposure) + payout_amount
+        required_balance = int(self.total_outstanding_exposure) + reserved_payout_amount
         if self.balance < required_balance:
             raise gl.vm.UserError(
-                "This policy's potential payout would exceed the contract's available reserve. "
+                "This policy's worst-case payout would exceed the contract's available reserve. "
                 f"Current reserve: {self.balance}, already-committed exposure: {int(self.total_outstanding_exposure)}, "
                 f"this policy would require: {required_balance} total. Try a smaller premium, or ask the "
                 "community/operator to top up the reserve via deposit_reserve first."
@@ -107,7 +113,8 @@ class WingbackInsurance(gl.Contract):
             "departure_date": departure_date,
             "departure_ts": int(departure_ts),
             "premium": premium,
-            "payout_amount": payout_amount,
+            "reserved_payout_amount": reserved_payout_amount,  # worst-case, fixed at purchase
+            "payout_amount": 0,  # actual tier-based amount, set at adjudication
             "status": "active",
             "delay_minutes": 0,
             "flight_status": "",
@@ -122,7 +129,7 @@ class WingbackInsurance(gl.Contract):
         self._write_policy(policy_id, policy_data)
         self._add_holder_policy(holder, policy_id)
 
-        self.total_outstanding_exposure = u256(int(self.total_outstanding_exposure) + payout_amount)
+        self.total_outstanding_exposure = u256(int(self.total_outstanding_exposure) + reserved_payout_amount)
 
         return policy_id
 
@@ -221,10 +228,9 @@ Return ONLY this JSON, nothing else:
                 delay_minutes = departure_delay
             if delay_minutes is None:
                 # A cancelled/diverted flight has no minutes figure to report,
-                # but it is unambiguously a qualifying event for this policy —
-                # defaulting it to 0 previously made it indistinguishable from
-                # "flew right on time", which is wrong. Treat it as a
-                # qualifying delay instead.
+                # but it is unambiguously the worst-case qualifying event —
+                # treat it as beyond the top tier threshold rather than
+                # defaulting to 0.
                 delay_minutes = 999 if flight_status in ("cancelled", "diverted") else 0
 
         policy["claim_narrative"] = claim_narrative
@@ -241,31 +247,34 @@ Return ONLY this JSON, nothing else:
         elif not narrative_consistent:
             # Checked before the delay threshold: a narrative that materially
             # contradicts the official record should be flagged regardless of
-            # how long the actual delay was — previously this was only ever
-            # reached for delays >= 180 minutes, so a false claim paired with
-            # a short (or cancelled-defaulted) delay silently passed as
-            # not_delayed instead of being flagged.
+            # how long the actual delay was.
             policy["status"] = "flagged_inconsistent"
-        elif delay_minutes < 180:
-            policy["status"] = "not_delayed"
         else:
-            payout_amount = policy["payout_amount"]
-            if self.balance >= payout_amount:
-                target = gl.get_contract_at(Address(policy["holder"]))
-                target.emit_transfer(value=payout_amount)
-                policy["status"] = "paid"
-                policy["paid_out"] = payout_amount
+            multiplier = _payout_multiplier(delay_minutes)
+            if multiplier == 0:
+                policy["status"] = "not_delayed"
             else:
-                # Should no longer be reachable under the full-collateralization
-                # guarantee in buy_policy — kept as a defensive fallback only.
-                policy["status"] = "delayed_unfunded"
+                payout_amount = policy["premium"] * multiplier
+                policy["payout_amount"] = payout_amount
+                if self.balance >= payout_amount:
+                    target = gl.get_contract_at(Address(policy["holder"]))
+                    target.emit_transfer(value=payout_amount)
+                    policy["status"] = "paid"
+                    policy["paid_out"] = payout_amount
+                else:
+                    # Should not be reachable under the reserve guarantee —
+                    # reserved_payout_amount (worst case) was already checked
+                    # to be coverable at purchase, and the actual payout here
+                    # is at most that reserved amount. Kept as a defensive
+                    # fallback only.
+                    policy["status"] = "delayed_unfunded"
 
         # This policy is now resolved to a terminal status one way or another
-        # (every branch above reaches here) — release its reserved exposure
-        # regardless of outcome, so the reserve capacity freed up is
-        # available for future policies.
+        # — release its full RESERVED exposure (the worst-case amount fixed
+        # at purchase), not just whatever was actually paid, since that's
+        # what was held against the pool's available balance.
         self.total_outstanding_exposure = u256(
-            max(0, int(self.total_outstanding_exposure) - policy["payout_amount"])
+            max(0, int(self.total_outstanding_exposure) - policy["reserved_payout_amount"])
         )
 
         self._write_policy(policy_id, policy)
