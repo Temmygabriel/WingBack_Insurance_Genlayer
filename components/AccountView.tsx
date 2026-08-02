@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { fromRawUnits } from "../lib/contract";
+import { useEffect, useState } from "react";
+import { fromRawUnits, getContractBalance, getTotalOutstandingExposure, getReserveDepositedTotal } from "../lib/contract";
 import { POLICY_STATUS } from "../types";
 import type { Policy } from "../types";
 import { isMetaMaskAvailable } from "../lib/wallet";
@@ -31,6 +31,35 @@ export function AccountView({
   const [keyCopied, setKeyCopied] = useState(false);
   const [importValue, setImportValue] = useState("");
   const [importError, setImportError] = useState("");
+  const [poolBalance, setPoolBalance] = useState<string | null>(null);
+  const [poolExposure, setPoolExposure] = useState<string | null>(null);
+  const [poolReserveDeposited, setPoolReserveDeposited] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPoolStats() {
+      try {
+        const [balance, exposure, deposited] = await Promise.all([
+          getContractBalance(),
+          getTotalOutstandingExposure(),
+          getReserveDepositedTotal(),
+        ]);
+        if (!cancelled) {
+          setPoolBalance(balance);
+          setPoolExposure(exposure);
+          setPoolReserveDeposited(deposited);
+        }
+      } catch {
+        // silent — pool stats are supplementary, not critical to the page
+      }
+    }
+    loadPoolStats();
+    const timer = setInterval(loadPoolStats, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   const isWallet = accountMode === "wallet";
 
@@ -92,6 +121,39 @@ export function AccountView({
           <div className="account-stat">
             <div className="account-stat-value mono">{totalPremium}</div>
             <div className="account-stat-label">GEN in premiums</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Pool health — real balance, outstanding exposure, deposited reserve ── */}
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-header">
+          <span className="card-label">Pool health</span>
+        </div>
+        <div className="card-body">
+          <p className="hint" style={{ marginBottom: 12, lineHeight: 1.6 }}>
+            The contract will never sell a policy whose worst-case payout would push outstanding
+            exposure past its real balance — this is what backs that guarantee.
+          </p>
+          <div className="account-stats">
+            <div className="account-stat">
+              <div className="account-stat-value mono">
+                {poolBalance !== null ? fromRawUnits(poolBalance) : "…"}
+              </div>
+              <div className="account-stat-label">Contract balance (GEN)</div>
+            </div>
+            <div className="account-stat">
+              <div className="account-stat-value mono">
+                {poolExposure !== null ? fromRawUnits(poolExposure) : "…"}
+              </div>
+              <div className="account-stat-label">Outstanding exposure (GEN)</div>
+            </div>
+            <div className="account-stat">
+              <div className="account-stat-value mono">
+                {poolReserveDeposited !== null ? fromRawUnits(poolReserveDeposited) : "…"}
+              </div>
+              <div className="account-stat-label">Reserve deposited (GEN)</div>
+            </div>
           </div>
         </div>
       </div>
