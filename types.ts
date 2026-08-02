@@ -45,6 +45,10 @@ export interface Policy {
   // at 0 and is only set once the policy resolves to "paid" — do not treat
   // 0 here as "no coverage," check reserved_payout_amount for the ceiling.
   payout_amount: number;
+  // What the pre-purchase adverse-selection check found at buy time — often
+  // "nothing to check yet" for advance purchases, since live status data
+  // usually doesn't exist that far ahead.
+  pre_purchase_check: string;
   status: PolicyStatus;
   delay_minutes: number;
   flight_status: string;
