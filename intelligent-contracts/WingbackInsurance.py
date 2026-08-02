@@ -89,6 +89,83 @@ class WingbackInsurance(gl.Contract):
         if premium <= 0:
             raise gl.vm.UserError("Premium must be greater than zero")
 
+        flight = flight_number.upper().strip()
+
+        # Adverse-selection check: refuse to sell coverage on a flight that
+        # already shows real trouble right now. This naturally only "bites"
+        # for near-term flights — a flight booked weeks out simply has no
+        # live status data yet, so this is a no-op for advance purchases
+        # without needing any notion of on-chain "now" (which GenLayer
+        # doesn't reliably expose).
+        api_key = self.aviationstack_key
+        risk_url = "https://api.aviationstack.com/v1/flights?access_key=" + api_key + "&flight_iata=" + flight
+
+        def generate_risk_check():
+            body_text = None
+            try:
+                response = gl.nondet.web.request(risk_url, method="GET")
+                body_text = response.body.decode("utf-8")
+            except Exception as e:
+                ctx = e.args[0] if e.args else {}
+                if isinstance(ctx, dict):
+                    body = ctx.get("body")
+                    if body:
+                        body_text = str(body)
+
+            if not body_text:
+                return json.dumps({
+                    "already_in_trouble": False,
+                    "reasoning": "No live record could be retrieved at purchase time — nothing to check yet."
+                })
+
+            snippet_input = body_text[:4000]
+            risk_prompt = f"""You are checking whether a flight already shows signs of trouble RIGHT NOW, before
+a policy is sold on it. This is a pre-purchase safety check, separate from any later claims adjudication.
+
+INSURED FLIGHT: {flight}, insured departure date {departure_date}.
+
+LIVE RECORD (raw JSON, may contain multiple dated records for this flight number):
+{snippet_input}
+END OF RECORD.
+
+Find the ONE record whose flight_date field exactly equals "{departure_date}", if any exists. If no such
+record exists yet, there is nothing to check — this is normal for a flight booked well in advance and is
+NOT itself a sign of trouble.
+
+If a record for that exact date exists, check ONLY its flight_status field and delay figures. Set
+already_in_trouble to true ONLY if the status already indicates a real problem happening now: "cancelled",
+"diverted", "incident", or a departure/arrival delay already reported and non-trivial (over 30 minutes). A
+status of "scheduled" is normal and not trouble. Do not flag "active" alone unless a real delay or irregular
+status is also present.
+
+Return ONLY this JSON, nothing else:
+{{"already_in_trouble": <true or false>, "reasoning": "<one sentence citing the specific status/delay you checked, or explaining why there was nothing to check>"}}"""
+
+            result = gl.nondet.exec_prompt(risk_prompt)
+            return result.replace("```json", "").replace("```", "")
+
+        risk_result_raw = gl.eq_principle.prompt_non_comparative(
+            generate_risk_check,
+            task="check whether a specific flight's live record already shows signs of trouble before coverage is sold on it",
+            criteria="a JSON object with already_in_trouble (bool) and reasoning (string) fields",
+        )
+
+        try:
+            start = risk_result_raw.find("{")
+            end = risk_result_raw.rfind("}") + 1
+            risk_json = json.loads(risk_result_raw[start:end]) if start >= 0 and end > start else {}
+        except Exception:
+            risk_json = {}
+
+        already_in_trouble = risk_json.get("already_in_trouble", False)
+        risk_reasoning = risk_json.get("reasoning") or "No pre-purchase risk reasoning was returned."
+
+        if already_in_trouble:
+            raise gl.vm.UserError(
+                "This flight already shows signs of trouble as of right now, so coverage can't be sold on it. "
+                + risk_reasoning
+            )
+
         # Reserve against the worst-case tier, not the actual eventual payout
         # (which isn't known until adjudication) — same full-collateralization
         # guarantee as before, sized to the real maximum this policy could owe.
@@ -109,12 +186,13 @@ class WingbackInsurance(gl.Contract):
         policy_data = {
             "policy_id": policy_id,
             "holder": holder,
-            "flight_number": flight_number.upper().strip(),
+            "flight_number": flight,
             "departure_date": departure_date,
             "departure_ts": int(departure_ts),
             "premium": premium,
             "reserved_payout_amount": reserved_payout_amount,  # worst-case, fixed at purchase
             "payout_amount": 0,  # actual tier-based amount, set at adjudication
+            "pre_purchase_check": risk_reasoning,  # transparency: what the risk check found, if anything
             "status": "active",
             "delay_minutes": 0,
             "flight_status": "",
