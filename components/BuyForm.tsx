@@ -20,6 +20,13 @@ export function BuyForm({
   onPremiumChange: (v: string) => void;
   onSubmit: (e: React.FormEvent) => void;
 }) {
+  // Today's date, local time, as YYYY-MM-DD — the date input's floor. No
+  // point letting anyone pick a flight that's already happened; the
+  // contract's live pre-purchase check would catch it anyway (a departed
+  // flight already has a concluded status), but this stops the confusing
+  // UX of it being selectable at all.
+  const todayStr = new Date().toISOString().split("T")[0];
+
   return (
     <form className="card" onSubmit={onSubmit}>
       <div className="card-header">
@@ -45,6 +52,7 @@ export function BuyForm({
               type="date"
               value={departureDate}
               onChange={(e) => onDepartureDateChange(e.target.value)}
+              min={todayStr}
               required
               disabled={buying}
             />
