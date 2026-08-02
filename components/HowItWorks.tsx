@@ -1,8 +1,8 @@
 const STEPS = [
-  "Register a flight with a small GEN premium",
+  "Register a flight with a small GEN premium — checked against its live status first",
   "Wait for it to land",
   "File a claim describing what happened",
-  "Validators reconcile it against the official record and reach consensus",
+  "Validators reconcile it, reach consensus, and payout scales with delay severity",
 ];
 
 export function HowItWorks() {
