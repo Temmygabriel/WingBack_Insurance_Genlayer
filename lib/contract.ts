@@ -49,6 +49,62 @@ function toCallAccount(account: SigningAccount): any {
   return account;
 }
 
+// waitForTransactionReceipt only waits for the transaction to reach a
+// decided consensus STATUS (e.g. ACCEPTED) — it does NOT check whether the
+// contract's own execution actually succeeded. A reverted call (a raised
+// UserError, an authorization failure, an insufficient-reserve rejection,
+// etc.) still reaches ACCEPTED status, the same way a failed Ethereum
+// transaction still gets mined — it just carries an error result instead of
+// throwing. Without this check, every caller of writeContract would
+// silently treat a rejected transaction as a success. Confirmed via a real
+// on-chain Rollback that the frontend previously reported as "Flight
+// registered" — this is not a hypothetical.
+function assertReceiptSucceeded(receipt: any): void {
+  const leaderReceipts = receipt?.consensus_data?.leader_receipt;
+  const entries = Array.isArray(leaderReceipts) ? leaderReceipts : leaderReceipts ? [leaderReceipts] : [];
+
+  for (const entry of entries) {
+    const executionResult = entry?.execution_result;
+    if (executionResult && String(executionResult).toUpperCase() !== "SUCCESS") {
+      const err = new Error(decodeContractErrorMessage(entry) || `Transaction reverted (${executionResult}).`);
+      (err as any).isContractRejection = true; // deterministic — don't retry
+      throw err;
+    }
+  }
+}
+
+function decodeContractErrorMessage(leaderReceiptEntry: any): string | null {
+  const raw = leaderReceiptEntry?.result;
+  if (raw == null) return null;
+
+  // `result` may already be a readable object/string, or may be base64 —
+  // try each in order rather than assuming one shape.
+  const candidates: unknown[] = [raw];
+  if (typeof raw === "string") {
+    try {
+      candidates.push(JSON.parse(raw));
+    } catch {
+      /* not JSON, ignore */
+    }
+    try {
+      candidates.push(JSON.parse(atob(raw)));
+    } catch {
+      /* not base64 JSON either, ignore */
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+    if (candidate && typeof candidate === "object") {
+      const obj = candidate as Record<string, unknown>;
+      const message = obj.message || obj.error || obj.reason;
+      if (typeof message === "string" && message.trim()) return message;
+    }
+  }
+
+  return typeof raw === "string" ? raw : null;
+}
+
 // --- Core client + account plumbing -----------------------------------------
 
 function makeClient(account: SigningAccount) {
@@ -78,15 +134,16 @@ export async function writeContract(
       if (value !== undefined) callParams.value = value;
 
       const hash = await client.writeContract(callParams as any);
-      await client.waitForTransactionReceipt({
+      const receipt = await client.waitForTransactionReceipt({
         hash,
         status: TransactionStatus.ACCEPTED,
         retries: 120,
         interval: 4000,
       });
+      assertReceiptSucceeded(receipt);
       return hash;
     } catch (err: any) {
-      if (attempt < MAX_ATTEMPTS) {
+      if (!err?.isContractRejection && attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, attempt * 3000));
         continue;
       }
@@ -126,15 +183,16 @@ export async function writeContractWithReturn(
       if (value !== undefined) callParams.value = value;
 
       const hash = await client.writeContract(callParams as any);
-      await client.waitForTransactionReceipt({
+      const receipt = await client.waitForTransactionReceipt({
         hash,
         status: TransactionStatus.ACCEPTED,
         retries: 120,
         interval: 4000,
       });
+      assertReceiptSucceeded(receipt);
       return returnValue as string;
     } catch (err: any) {
-      if (attempt < MAX_ATTEMPTS) {
+      if (!err?.isContractRejection && attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, attempt * 3000));
         continue;
       }
