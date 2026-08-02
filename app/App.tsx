@@ -205,7 +205,7 @@ export default function App() {
   const PAGE_COPY: Record<Tab, { title: string; sub: string }> = {
     register: {
       title: "Register a flight",
-      sub: "Pay a small GEN premium to open a claim window for a flight. Nothing else happens until you file a claim after it lands.",
+      sub: "Pay a small GEN premium to open a claim window for a flight. The contract checks the flight isn't already in trouble before selling coverage.",
     },
     policies: {
       title: "My Flights",
