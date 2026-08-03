@@ -66,7 +66,11 @@ function assertReceiptSucceeded(receipt: any): void {
   for (const entry of entries) {
     const executionResult = entry?.execution_result;
     if (executionResult && String(executionResult).toUpperCase() !== "SUCCESS") {
-      const err = new Error(decodeContractErrorMessage(entry) || `Transaction reverted (${executionResult}).`);
+      const decoded = decodeContractErrorMessage(entry);
+      const err = new Error(
+        decoded ||
+          `The contract rejected this transaction (${executionResult}) but the reason couldn't be read automatically — check the browser console for the raw details, or look up this transaction on the GenLayer explorer.`
+      );
       (err as any).isContractRejection = true; // deterministic — don't retry
       throw err;
     }
@@ -77,8 +81,10 @@ function decodeContractErrorMessage(leaderReceiptEntry: any): string | null {
   const raw = leaderReceiptEntry?.result;
   if (raw == null) return null;
 
-  // `result` may already be a readable object/string, or may be base64 —
-  // try each in order rather than assuming one shape.
+  // `result` may already be a readable string/object, valid JSON as a
+  // string, or base64 — and base64 might decode to JSON OR to plain text.
+  // Try every shape rather than assuming one, since guessing wrong before
+  // silently produced no message at all.
   const candidates: unknown[] = [raw];
   if (typeof raw === "string") {
     try {
@@ -87,20 +93,37 @@ function decodeContractErrorMessage(leaderReceiptEntry: any): string | null {
       /* not JSON, ignore */
     }
     try {
-      candidates.push(JSON.parse(atob(raw)));
+      const decoded = atob(raw);
+      candidates.push(decoded); // plain text after base64 decode
+      try {
+        candidates.push(JSON.parse(decoded)); // or JSON after base64 decode
+      } catch {
+        /* not JSON either, the plain-text candidate above still stands */
+      }
     } catch {
-      /* not base64 JSON either, ignore */
+      /* not valid base64 at all, ignore */
     }
   }
 
+  const MESSAGE_KEYS = ["message", "error", "reason", "detail", "msg", "description"];
+
   for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) return candidate;
+    if (typeof candidate === "string" && candidate.trim() && candidate !== raw) return candidate;
     if (candidate && typeof candidate === "object") {
-      const obj = candidate as Record<string, unknown>;
-      const message = obj.message || obj.error || obj.reason;
-      if (typeof message === "string" && message.trim()) return message;
+      for (const key of MESSAGE_KEYS) {
+        const value = (candidate as Record<string, unknown>)[key];
+        if (typeof value === "string" && value.trim()) return value;
+      }
     }
   }
+  // Plain raw string as last resort, after structured attempts came up empty.
+  if (typeof raw === "string" && raw.trim()) return raw;
+
+  // Genuinely couldn't decode anything readable — log the real shape so
+  // this can actually be fixed with real data instead of another guess.
+  console.error("Could not decode contract error message. Raw leader receipt entry:", leaderReceiptEntry);
+  return null;
+}
 
   return typeof raw === "string" ? raw : null;
 }
@@ -121,19 +144,31 @@ export async function writeContract(
   args: unknown[],
   value?: bigint
 ): Promise<string> {
+  let hash: string | undefined;
+
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const client = makeClient(account);
-      const callParams: Record<string, unknown> = {
-        address: CONTRACT_ADDRESS,
-        functionName: method,
-        args,
-        account: toCallAccount(account),
-        leaderOnly: false,
-      };
-      if (value !== undefined) callParams.value = value;
 
-      const hash = await client.writeContract(callParams as any);
+      // Only submit a new transaction if we don't already have a hash from
+      // a prior attempt — retrying a WRITE by resubmitting from scratch can
+      // create a second, completely separate real on-chain transaction
+      // (charging a premium twice, reserving exposure twice) if the first
+      // attempt actually went through but the client just failed to
+      // confirm it in time. A retry should re-check the SAME transaction,
+      // never submit a new one, once a hash exists.
+      if (!hash) {
+        const callParams: Record<string, unknown> = {
+          address: CONTRACT_ADDRESS,
+          functionName: method,
+          args,
+          account: toCallAccount(account),
+          leaderOnly: false,
+        };
+        if (value !== undefined) callParams.value = value;
+        hash = await client.writeContract(callParams as any);
+      }
+
       const receipt = await client.waitForTransactionReceipt({
         hash,
         status: TransactionStatus.ACCEPTED,
@@ -145,11 +180,12 @@ export async function writeContract(
     } catch (err: any) {
       if (!err?.isContractRejection && attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, attempt * 3000));
-        continue;
+        continue; // hash (if we got one) is preserved — next attempt re-polls it, doesn't resubmit
       }
       throw err;
     }
   }
+  throw new Error("All attempts failed");
 }
 
 // Use this ONLY for contract methods that return a value (buy_policy returns policy_id)
@@ -159,30 +195,35 @@ export async function writeContractWithReturn(
   args: unknown[],
   value?: bigint
 ): Promise<string> {
+  let hash: string | undefined;
+  let returnValue: string | undefined;
+
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const client = makeClient(account);
-      const simParams: Record<string, unknown> = {
-        address: CONTRACT_ADDRESS,
-        functionName: method,
-        args,
-        account: toCallAccount(account),
-      };
-      if (value !== undefined) simParams.value = value;
 
-      // simulateWriteContract gets the return value without waiting for consensus
-      const returnValue = await client.simulateWriteContract(simParams as any);
+      if (!hash) {
+        const simParams: Record<string, unknown> = {
+          address: CONTRACT_ADDRESS,
+          functionName: method,
+          args,
+          account: toCallAccount(account),
+        };
+        if (value !== undefined) simParams.value = value;
+        // simulateWriteContract gets the return value without waiting for consensus
+        returnValue = (await client.simulateWriteContract(simParams as any)) as string;
 
-      const callParams: Record<string, unknown> = {
-        address: CONTRACT_ADDRESS,
-        functionName: method,
-        args,
-        account: toCallAccount(account),
-        leaderOnly: false,
-      };
-      if (value !== undefined) callParams.value = value;
+        const callParams: Record<string, unknown> = {
+          address: CONTRACT_ADDRESS,
+          functionName: method,
+          args,
+          account: toCallAccount(account),
+          leaderOnly: false,
+        };
+        if (value !== undefined) callParams.value = value;
+        hash = await client.writeContract(callParams as any);
+      }
 
-      const hash = await client.writeContract(callParams as any);
       const receipt = await client.waitForTransactionReceipt({
         hash,
         status: TransactionStatus.ACCEPTED,
@@ -194,7 +235,7 @@ export async function writeContractWithReturn(
     } catch (err: any) {
       if (!err?.isContractRejection && attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, attempt * 3000));
-        continue;
+        continue; // hash/returnValue (if obtained) are preserved — re-poll, don't resubmit
       }
       throw err;
     }
