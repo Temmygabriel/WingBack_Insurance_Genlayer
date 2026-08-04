@@ -48,6 +48,11 @@ export default function App() {
   const [buying, setBuying] = useState(false);
   const [adjudicatingIds, setAdjudicatingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string>("");
+
+  function changeTab(next: Tab) {
+    setError("");
+    setTab(next);
+  }
   const [toast, setToast] = useState<string>("");
 
   const [flightNumber, setFlightNumber] = useState("");
@@ -89,7 +94,7 @@ export default function App() {
 
   function handleImportAccount(key: string) {
     loadBurnerAccount(key as `0x${string}`);
-    setTab("policies");
+    changeTab("policies");
     setFlightFilter("active");
     showToast("Account imported. Loading its flights…");
   }
@@ -165,7 +170,7 @@ export default function App() {
       await buyPolicy(accountRef.current, flightNumber.trim().toUpperCase(), departureDate, departureTs, premium);
       setFlightNumber("");
       await refreshPolicies();
-      setTab("policies");
+      changeTab("policies");
       setFlightFilter("active");
       showToast("Flight registered. File a claim once it's landed.");
     } catch (err: any) {
@@ -228,10 +233,10 @@ export default function App() {
           <span>Wingback</span>
         </div>
         <nav className="tab-bar">
-          <button className={`tab-btn ${tab === "register" ? "active" : ""}`} onClick={() => setTab("register")}>
+          <button className={`tab-btn ${tab === "register" ? "active" : ""}`} onClick={() => changeTab("register")}>
             Register
           </button>
-          <button className={`tab-btn ${tab === "policies" ? "active" : ""}`} onClick={() => setTab("policies")}>
+          <button className={`tab-btn ${tab === "policies" ? "active" : ""}`} onClick={() => changeTab("policies")}>
             My Flights{policies.length > 0 ? ` (${policies.length})` : ""}
           </button>
         </nav>
@@ -253,7 +258,7 @@ export default function App() {
           )}
           <button
             className="app-topbar__account"
-            onClick={() => setTab("account")}
+            onClick={() => changeTab("account")}
             title={accountMode === "wallet" ? "Connected wallet — view account" : "Guest account — view account & connect a wallet"}
           >
             <span className={`app-topbar__account-dot app-topbar__account-dot--${accountMode}`} />
@@ -267,7 +272,21 @@ export default function App() {
       </div>
 
       {toast && <div className="toast">{toast}</div>}
-      {error && <div className="banner banner-error" style={{ marginBottom: 20 }}>{error}</div>}
+      {error && (
+        <div
+          className="banner banner-error"
+          style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}
+        >
+          <span>{error}</span>
+          <button
+            onClick={() => setError("")}
+            aria-label="Dismiss"
+            style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: 16, lineHeight: 1, flexShrink: 0, padding: 0 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="page-header">
         <h2>{PAGE_COPY[tab].title}</h2>
