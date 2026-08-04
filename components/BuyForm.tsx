@@ -79,10 +79,8 @@ export function BuyForm({
         {buying ? (
           <RegistrationProgress />
         ) : (
-          <p className="hint">
-            Before selling coverage, the contract checks whether this flight is already showing
-            trouble. That check only finds anything for near-term flights — advance bookings
-            register instantly.
+          <p className="hint" style={{ margin: 0 }}>
+            ⏱ Takes a few minutes — we check the flight isn't already in trouble first.
           </p>
         )}
       </div>
