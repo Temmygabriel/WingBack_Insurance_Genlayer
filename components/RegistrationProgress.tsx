@@ -1,6 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 
+const STEPS = [
+  "Checking this flight isn't already in trouble",
+  "Writing your policy on-chain",
+];
+
 export function RegistrationProgress() {
   const [elapsed, setElapsed] = useState(0);
 
@@ -12,17 +17,19 @@ export function RegistrationProgress() {
     return () => clearInterval(timer);
   }, []);
 
+  const currentIndex = elapsed < 20 ? 0 : 1;
+
   return (
     <div className="progress-steps" style={{ marginTop: 10 }}>
-      <div className="progress-step current">
-        <span className="progress-dot" />
-        Registering…
-      </div>
-      <p className="hint" style={{ marginTop: 8 }}>
-        {elapsed < 8
-          ? "Usually instant for flights booked a few days out or more."
-          : "This flight is close enough that the contract is checking its live status before selling coverage — this can take a few minutes for near-term flights."}
-      </p>
+      {STEPS.map((label, i) => (
+        <div
+          key={label}
+          className={`progress-step ${i < currentIndex ? "done" : i === currentIndex ? "current" : ""}`}
+        >
+          <span className="progress-dot" />
+          {label}
+        </div>
+      ))}
     </div>
   );
 }
