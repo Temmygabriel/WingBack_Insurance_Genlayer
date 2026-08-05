@@ -1,6 +1,7 @@
 import { createClient, createAccount } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
+import { generatePrivateKey } from "viem/accounts";
 import type { Policy } from "../types";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`;
@@ -135,7 +136,19 @@ function makeClient(account: SigningAccount) {
 }
 
 export function makeAccount(privateKey?: `0x${string}`) {
-  return createAccount(privateKey);
+  // genlayer-js's createAccount() never exposes .privateKey on the returned
+  // object — confirmed by searching the whole SDK source, zero occurrences.
+  // Reading acc.privateKey afterward has always silently returned undefined,
+  // which meant every "restore from localStorage" attempt was actually
+  // restoring from the literal string "undefined" and falling back to a
+  // fresh random wallet — every reload, forever. The fix: generate the key
+  // ourselves before creating the account, so we always hold the real
+  // string directly, then attach it to the object explicitly since
+  // genlayer-js never will.
+  const key = privateKey || generatePrivateKey();
+  const account = createAccount(key) as any;
+  account.privateKey = key;
+  return account as ReturnType<typeof createAccount> & { privateKey: `0x${string}` };
 }
 
 export async function writeContract(
