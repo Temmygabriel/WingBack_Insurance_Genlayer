@@ -126,9 +126,6 @@ function decodeContractErrorMessage(leaderReceiptEntry: any): string | null {
   return null;
 }
 
-  return typeof raw === "string" ? raw : null;
-}
-
 // --- Core client + account plumbing -----------------------------------------
 
 function makeClient(account: SigningAccount) {
